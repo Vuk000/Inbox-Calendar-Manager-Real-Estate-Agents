@@ -20,6 +20,7 @@ from ..integrations.vector_store import VectorStore
 from ..agents.triage_agent import TriageAgent
 from ..security.encryption import encrypt_data, decrypt_data
 from ..security.audit import log_action
+from ..websocket.connection_manager import connection_manager
 from ..shared.exceptions import (
     GmailIntegrationException,
     OutlookIntegrationException,
@@ -152,6 +153,13 @@ def sync_gmail_account(self, user_id: int, account_id: int, db: Session = None) 
             user_id=user_id,
             description=f"Synced {processed_count} emails from Gmail",
             metadata={"account_id": account_id, "processed": processed_count}
+        ))
+        
+        # Notify sync complete
+        asyncio.run(connection_manager.notify_sync_status(
+            user_id=user_id,
+            status="complete",
+            message=f"Synced {processed_count} new emails"
         ))
         
         logger.info(f"Successfully synced {processed_count} emails from Gmail account {account_id}")

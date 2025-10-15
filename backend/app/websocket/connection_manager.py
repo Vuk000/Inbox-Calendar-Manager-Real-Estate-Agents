@@ -1,9 +1,14 @@
 """
 WebSocket connection manager for real-time notifications
+Enhanced for Phase 4: Real-time email sync and notifications
 """
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Any
 from fastapi import WebSocket
+from datetime import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -151,8 +156,74 @@ class ConnectionManager:
             {
                 "type": "sync_status",
                 "status": status,
-                "message": message
+                "message": message,
+                "timestamp": datetime.utcnow().isoformat()
             },
             user_id
         )
+    
+    async def notify_triage_complete(
+        self,
+        user_id: int,
+        email_id: int,
+        triage_result: Dict[str, Any]
+    ):
+        """
+        Notify user that email triage is complete.
+        
+        Args:
+            user_id: User ID
+            email_id: Email ID
+            triage_result: Triage analysis results
+        """
+        await self.broadcast_to_user(
+            {
+                "type": "triage_complete",
+                "email_id": email_id,
+                "triage": triage_result,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            user_id
+        )
+        
+        logger.info(f"Notified user {user_id} about triage completion for email {email_id}")
+    
+    async def notify_task_update(
+        self,
+        user_id: int,
+        task_data: Dict[str, Any]
+    ):
+        """
+        Notify user about task updates.
+        
+        Args:
+            user_id: User ID
+            task_data: Task data
+        """
+        await self.broadcast_to_user(
+            {
+                "type": "task_update",
+                "data": task_data,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            user_id
+        )
+    
+    def get_connection_count(self, user_id: Optional[int] = None) -> int:
+        """
+        Get count of active connections.
+        
+        Args:
+            user_id: Optional user ID to get count for specific user
+            
+        Returns:
+            Number of active connections
+        """
+        if user_id:
+            return len(self.active_connections.get(user_id, []))
+        return sum(len(conns) for conns in self.active_connections.values())
+
+
+# Global connection manager instance for use across app
+connection_manager = ConnectionManager()
 
