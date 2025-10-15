@@ -1,0 +1,63 @@
+# FastAPI and Core
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+pydantic==2.11.4
+pydantic-settings==2.6.1
+
+# Database
+sqlalchemy==2.0.44
+alembic==1.12.1
+psycopg2-binary==2.9.11
+redis==4.6.0
+
+# AI & ML
+anthropic==0.7.7
+# langchain==0.1.0  # Optional - requires numpy (compile on Python 3.13)
+# langchain-anthropic==0.1.0  # Optional - depends on langchain
+pinecone-client==4.1.2
+# tiktoken==0.5.2  # Optional - requires Rust compiler on Python 3.13
+# sentence-transformers==2.2.2  # Optional - requires numpy build on Python 3.13
+
+# Email Integrations
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+msal==1.25.0
+
+# Document Processing
+PyPDF2==3.0.1
+python-docx==1.1.0
+boto3==1.33.6  # AWS S3
+
+# Communication
+twilio==8.10.3
+requests==2.31.0
+
+# Background Tasks
+celery==5.3.4
+celery[redis]==5.3.4
+
+# Security & Encryption
+cryptography==41.0.7
+pyotp==2.9.0
+
+# Payments
+stripe==7.6.0
+
+# Utilities
+python-dotenv==1.0.0
+pydantic-core==2.33.2
+aiofiles==23.2.1
+httpx==0.25.2
+
+# Monitoring & Analytics
+sentry-sdk==1.38.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+faker==20.1.0
