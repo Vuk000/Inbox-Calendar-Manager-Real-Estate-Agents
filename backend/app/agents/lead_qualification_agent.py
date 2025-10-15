@@ -1,24 +1,44 @@
 """
 Lead Qualification Agent - Scores and enriches leads from emails
+Refactored to use shared prompts, types, and exceptions
 """
-from typing import Dict, Any, Optional
-from datetime import datetime
+from typing import Dict, Any
 import json
+import logging
+from datetime import datetime
 from anthropic import Anthropic
+
 from ..config import settings
+from ..shared.prompts import build_lead_qual_prompt, LEAD_QUAL_QUESTIONS_TEMPLATE
+from ..shared.types import LeadQualification, QualificationFactors, ContactInfo, IntentAnalysis
+from ..shared.exceptions import LeadQualificationException, AnthropicAPIException
+
+logger = logging.getLogger(__name__)
 
 
 class LeadQualificationAgent:
     """
     Analyzes lead emails and provides qualification scoring.
     Extracts key information for CRM entry.
+    
+    Refactored to use:
+    - Centralized prompts from shared.prompts
+    - Pydantic types from shared.types
+    - Custom exceptions from shared.exceptions
     """
     
-    def __init__(self):
-        self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    def __init__(self, claude_client: Anthropic = None):
+        """
+        Initialize lead qualification agent.
+        
+        Args:
+            claude_client: Optional Anthropic client for dependency injection.
+                          If None, creates client from settings.
+        """
+        self.client = claude_client or Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = settings.ANTHROPIC_MODEL
     
-    async def qualify_lead(self, email_content: Dict[str, Any]) -> Dict[str, Any]:
+    async def qualify_lead(self, email_content: Dict[str, Any]) -> LeadQualification:
         """
         Analyze lead email and provide qualification score.
         
@@ -26,94 +46,79 @@ class LeadQualificationAgent:
             email_content: Email data with lead inquiry
             
         Returns:
-            Lead qualification data with score and extracted info
+            LeadQualification: Pydantic model with structured qualification data
+            
+        Raises:
+            LeadQualificationException: If qualification fails
+            AnthropicAPIException: If Claude API call fails
         """
-        prompt = f"""You are a real estate lead qualification expert. Analyze this lead inquiry email and extract key information.
-
-Email:
-From: {email_content.get('sender_email', '')} ({email_content.get('sender_name', 'Unknown')})
-Subject: {email_content.get('subject', '')}
-Body:
-{email_content.get('body', '')}
-
-Provide a comprehensive lead qualification in JSON format:
-
-1. **lead_score** (integer 0-100): Overall lead quality
-   - 80-100 (Hot): Ready to act, specific needs, timeline mentioned, pre-approved
-   - 50-79 (Warm): Interested, some specifics, needs nurturing
-   - 0-49 (Cold): Vague interest, tire-kicker, unclear needs
-
-2. **qualification_factors** (object):
-   - budget_mentioned (boolean)
-   - budget_range (string or null): e.g., "$300K-$400K"
-   - timeline_mentioned (boolean)
-   - timeline (string or null): e.g., "next 3 months", "immediately"
-   - location_specified (boolean)
-   - locations (array): Preferred areas/neighborhoods
-   - buyer_or_seller (string): "buyer", "seller", "both", or "unknown"
-   - property_type (string or null): "house", "condo", "land", etc.
-   - bedrooms (integer or null)
-   - bathrooms (float or null)
-   - specific_features (array): Must-haves mentioned
-   - pre_approved (boolean or null): Financing mentioned
-   - working_with_agent (boolean or null): Already has representation
-   - urgency_level (string): "high", "medium", "low"
-
-3. **contact_info** (object):
-   - phone_mentioned (boolean)
-   - phone_number (string or null)
-   - preferred_contact_method (string): "email", "phone", "text", "unknown"
-   - best_time_to_contact (string or null)
-
-4. **intent_analysis** (object):
-   - primary_intent (string): "buy", "sell", "rent", "invest", "explore", "spam"
-   - motivation (string): Why they're looking (upgrade, downsize, job relocation, investment, etc.)
-   - pain_points (array): Concerns or challenges mentioned
-   - objections (array): Potential objections detected
-
-5. **recommended_actions** (array): Next steps to take
-   - Options: "call_immediately", "send_listings", "schedule_showing", "send_market_report", 
-     "ask_qualifying_questions", "nurture_campaign", "ignore"
-
-6. **auto_response_suggested** (boolean): Should auto-send a reply?
-
-7. **crm_tags** (array): Suggested CRM tags for this lead
-
-8. **confidence** (float 0-1): Confidence in this analysis
-
-Return ONLY valid JSON:"""
-
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=settings.ANTHROPIC_MAX_TOKENS,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            # Build prompt using centralized function
+            prompt = build_lead_qual_prompt(email_content)
+            
+            # Call Claude
+            try:
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=settings.ANTHROPIC_MAX_TOKENS,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+            except Exception as e:
+                logger.error(f"Anthropic API error: {str(e)}")
+                raise AnthropicAPIException(
+                    f"Failed to qualify lead: {str(e)}",
+                    error_code="CLAUDE_LEAD_QUAL_ERROR"
+                )
             
             response_text = message.content[0].text
-            qualification = json.loads(response_text)
             
-            # Add metadata
-            qualification["qualified_at"] = datetime.utcnow().isoformat()
-            qualification["model_version"] = self.model
-            qualification["source_email"] = email_content.get("external_id")
+            # Parse JSON response
+            try:
+                qualification_dict = json.loads(response_text)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode error in lead qualification, using fallback: {str(e)}")
+                return self._fallback_qualification(email_content, str(e))
+            
+            # Build Pydantic models from dict
+            qual_factors_dict = qualification_dict.get("qualification_factors", {})
+            qual_factors = QualificationFactors(**qual_factors_dict)
+            
+            contact_info_dict = qualification_dict.get("contact_info")
+            contact_info = ContactInfo(**contact_info_dict) if contact_info_dict else None
+            
+            intent_dict = qualification_dict.get("intent_analysis")
+            intent_analysis = IntentAnalysis(**intent_dict) if intent_dict else None
+            
+            # Create LeadQualification Pydantic model
+            qualification = LeadQualification(
+                lead_score=qualification_dict.get("lead_score", 50),
+                qualification_factors=qual_factors,
+                contact_info=contact_info,
+                intent_analysis=intent_analysis,
+                recommended_actions=qualification_dict.get("recommended_actions", []),
+                auto_response_suggested=qualification_dict.get("auto_response_suggested", False),
+                crm_tags=qualification_dict.get("crm_tags", []),
+                confidence=qualification_dict.get("confidence", 0.7),
+                qualified_at=datetime.utcnow().isoformat(),
+                model_version=self.model,
+                source_email=email_content.get("external_id")
+            )
+            
+            logger.info(
+                f"Qualified lead: score={qualification.lead_score}, "
+                f"intent={qualification.intent_analysis.primary_intent if qualification.intent_analysis else 'unknown'}, "
+                f"urgency={qualification.qualification_factors.urgency_level}"
+            )
             
             return qualification
             
+        except AnthropicAPIException:
+            # Re-raise API exceptions
+            raise
+            
         except Exception as e:
-            # Fallback
-            return {
-                "lead_score": 50,
-                "qualification_factors": {
-                    "urgency_level": "medium",
-                    "buyer_or_seller": "unknown"
-                },
-                "recommended_actions": ["ask_qualifying_questions"],
-                "auto_response_suggested": True,
-                "confidence": 0.3,
-                "error": str(e),
-                "qualified_at": datetime.utcnow().isoformat()
-            }
+            logger.exception(f"Unexpected error in lead qualification: {str(e)}")
+            return self._fallback_qualification(email_content, str(e))
     
     async def generate_qualification_questions(
         self,
@@ -127,39 +132,107 @@ Return ONLY valid JSON:"""
             
         Returns:
             Email text with qualifying questions
+            
+        Raises:
+            LeadQualificationException: If question generation fails
         """
-        missing_info = []
-        
-        qual_factors = lead_data.get("qualification_factors", {})
-        if not qual_factors.get("budget_mentioned"):
-            missing_info.append("budget/price range")
-        if not qual_factors.get("timeline_mentioned"):
-            missing_info.append("timeline")
-        if not qual_factors.get("location_specified"):
-            missing_info.append("preferred areas")
-        
-        prompt = f"""Write a friendly email to a real estate lead asking qualifying questions.
-
-Missing information: {', '.join(missing_info)}
-
-The email should:
-1. Thank them for reaching out
-2. Express enthusiasm about helping them
-3. Ask 3-5 specific qualifying questions naturally
-4. Keep it conversational, not like a form
-5. Invite them to schedule a call
-
-Write ONLY the email body:"""
-
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=800,
-                messages=[{"role": "user", "content": prompt}]
+            # Determine missing information
+            missing_info = []
+            
+            qual_factors = lead_data.get("qualification_factors", {})
+            if not qual_factors.get("budget_mentioned"):
+                missing_info.append("budget/price range")
+            if not qual_factors.get("timeline_mentioned"):
+                missing_info.append("timeline")
+            if not qual_factors.get("location_specified"):
+                missing_info.append("preferred areas")
+            
+            # Build prompt
+            prompt = LEAD_QUAL_QUESTIONS_TEMPLATE.format(
+                missing_info=', '.join(missing_info) if missing_info else "general information"
             )
             
-            return message.content[0].text.strip()
+            try:
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=800,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+            except Exception as e:
+                logger.error(f"Anthropic API error during question generation: {str(e)}")
+                # Use fallback
+                return self._fallback_questions()
             
-        except Exception:
-            return "Thank you for your interest! I'd love to help you find the perfect property. Could you share a bit more about what you're looking for, including your budget range, preferred areas, and timeline? Feel free to call me directly as well!"
+            questions_text = message.content[0].text.strip()
+            
+            logger.info(f"Generated qualification questions for {len(missing_info)} missing fields")
+            
+            return questions_text
+            
+        except Exception as e:
+            logger.exception(f"Error generating qualification questions: {str(e)}")
+            return self._fallback_questions()
+    
+    def _fallback_qualification(self, email_content: Dict[str, Any], error: str) -> LeadQualification:
+        """
+        Fallback basic qualification when AI fails.
+        
+        Args:
+            email_content: Email data
+            error: Error message
+            
+        Returns:
+            LeadQualification: Basic qualification with fallback indicator
+        """
+        # Basic keyword detection
+        text = (email_content.get("subject", "") + " " + email_content.get("body", "")).lower()
+        
+        # Simple scoring
+        lead_score = 50  # Default medium
+        if any(word in text for word in ["urgent", "immediate", "asap", "pre-approved"]):
+            lead_score = 75
+        if any(word in text for word in ["just looking", "maybe", "curious"]):
+            lead_score = 30
+        
+        # Minimal factors
+        qual_factors = QualificationFactors(
+            urgency_level="medium",
+            buyer_or_seller="unknown"
+        )
+        
+        # Minimal intent
+        intent = IntentAnalysis(
+            primary_intent="explore"
+        )
+        
+        return LeadQualification(
+            lead_score=lead_score,
+            qualification_factors=qual_factors,
+            intent_analysis=intent,
+            recommended_actions=["ask_qualifying_questions"],
+            auto_response_suggested=True,
+            crm_tags=["unqualified", "needs-follow-up"],
+            confidence=0.3,
+            qualified_at=datetime.utcnow().isoformat(),
+            model_version="fallback",
+            error=error
+        )
+    
+    def _fallback_questions(self) -> str:
+        """
+        Fallback qualification questions.
+        
+        Returns:
+            Basic question template
+        """
+        return """Thank you for your interest! I'd love to help you find the perfect property. 
+
+To better assist you, could you share a bit more about what you're looking for?
+- What's your budget range?
+- What areas are you interested in?
+- What's your timeline for moving?
+- Any specific features or requirements?
+
+Feel free to call me directly as well - I'm here to help!"""
 
