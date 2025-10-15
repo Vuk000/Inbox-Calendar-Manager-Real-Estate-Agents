@@ -1,0 +1,52 @@
+# Prometheus configuration for RealInbox AI
+# Phase 5.4: Monitoring & Observability
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'realinbox-production'
+    replica: 'prometheus-1'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files
+rule_files:
+  # - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape RealInbox AI backend
+  - job_name: 'realinbox-backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+    scrape_interval: 30s
+
+  # Scrape Celery workers (if exposing metrics)
+  - job_name: 'celery-worker'
+    static_configs:
+      - targets: ['celery_worker:9999']
+    scrape_interval: 30s
+
+  # Node exporter for system metrics (optional)
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB
+

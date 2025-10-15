@@ -1,0 +1,110 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Run tests first
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+
+  # Deploy Backend to Render
+  deploy-backend:
+    name: Deploy Backend
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+        continue-on-error: true
+      
+      - name: Wait for deployment
+        run: sleep 60
+      
+      - name: Health check
+        run: |
+          curl -f ${{ secrets.BACKEND_URL }}/health || exit 1
+
+  # Deploy Frontend to Vercel
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+      
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend
+      
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend
+      
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend
+
+  # Deploy Celery Workers
+  deploy-workers:
+    name: Deploy Celery Workers
+    needs: [test, deploy-backend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Trigger Render Worker Deploy
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}
+        continue-on-error: true
+
+  # Post-deployment checks
+  post-deploy:
+    name: Post-Deployment Validation
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check Backend Health
+        run: |
+          response=$(curl -s ${{ secrets.BACKEND_URL }}/health)
+          echo "Backend health: $response"
+          echo "$response" | grep -q "healthy" || exit 1
+      
+      - name: Check Frontend
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.FRONTEND_URL }})
+          echo "Frontend status: $status"
+          [ "$status" = "200" ] || exit 1
+      
+      - name: Notify Deployment Success
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Backend: ${{ secrets.BACKEND_URL }}"
+          echo "Frontend: ${{ secrets.FRONTEND_URL }}"
+
+# Secrets required:
+# - RENDER_DEPLOY_HOOK_BACKEND
+# - RENDER_DEPLOY_HOOK_WORKER
+# - VERCEL_TOKEN
+# - BACKEND_URL (e.g., https://realinbox-api.onrender.com)
+# - FRONTEND_URL (e.g., https://realinbox.vercel.app)
+
