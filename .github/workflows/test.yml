@@ -1,0 +1,230 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-lint:
+    name: Backend Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install black isort mypy bandit
+          pip install -r requirements.txt
+      
+      - name: Run Black
+        working-directory: ./backend
+        run: black --check app/ tests/ || true
+      
+      - name: Run isort
+        working-directory: ./backend
+        run: isort --check-only app/ tests/ || true
+      
+      - name: Run mypy
+        working-directory: ./backend
+        run: mypy app/ || true
+      
+      - name: Run Bandit security scan
+        working-directory: ./backend
+        run: bandit -r app/ -f json -o bandit-report.json || true
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+      
+      - name: Run tests with coverage
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-jwt-secret
+          ENCRYPTION_KEY: test-encryption-key-32-characters
+          ENCRYPTION_SALT: test-salt-16chars
+          ANTHROPIC_API_KEY: sk-ant-test-key-for-ci-only
+          PINECONE_API_KEY: test-pinecone-key
+          PINECONE_ENVIRONMENT: test
+          GOOGLE_CLIENT_ID: test-google-client-id
+          GOOGLE_CLIENT_SECRET: test-google-secret
+          GOOGLE_REDIRECT_URI: http://localhost:8000/callback
+          MICROSOFT_CLIENT_ID: test-microsoft-id
+          MICROSOFT_CLIENT_SECRET: test-microsoft-secret
+          MICROSOFT_REDIRECT_URI: http://localhost:8000/callback
+          TWILIO_ACCOUNT_SID: test-twilio-sid
+          TWILIO_AUTH_TOKEN: test-twilio-token
+          TWILIO_PHONE_NUMBER: +15551234567
+          TWILIO_WHATSAPP_NUMBER: +15551234567
+          AWS_ACCESS_KEY_ID: test-aws-key
+          AWS_SECRET_ACCESS_KEY: test-aws-secret
+          AWS_S3_BUCKET: test-bucket
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/0
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=term-missing -v
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+  frontend-lint:
+    name: Frontend Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+      
+      - name: Run TypeScript check
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Run tests with coverage
+        working-directory: ./frontend
+        run: npx vitest run --coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run npm audit (frontend)
+        working-directory: ./frontend
+        run: npm audit --production || true
+      
+      - name: Set up Python for backend security
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Bandit
+        run: pip install bandit
+      
+      - name: Run Bandit security scan
+        working-directory: ./backend
+        run: bandit -r app/ -f json -o bandit-report.json
+        continue-on-error: true
+      
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-security-report
+          path: backend/bandit-report.json
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, security-scan]
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "✅ All test suites completed"
+          echo "Backend tests: ${{ needs.backend-tests.result }}"
+          echo "Frontend tests: ${{ needs.frontend-tests.result }}"
+          echo "Security scan: ${{ needs.security-scan.result }}"
+
