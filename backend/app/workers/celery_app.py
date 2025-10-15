@@ -11,7 +11,7 @@ celery_app = Celery(
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
-        "app.workers.email_sync",
+        "app.tasks.email_sync_task",
     ]
 )
 
@@ -32,11 +32,11 @@ celery_app.conf.update(
 # Periodic tasks schedule
 celery_app.conf.beat_schedule = {
     "sync-all-gmail-accounts": {
-        "task": "app.workers.email_sync.sync_all_gmail_accounts",
+        "task": "app.tasks.email_sync_task.sync_all_gmail_accounts",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
     "sync-all-outlook-accounts": {
-        "task": "app.workers.email_sync.sync_all_outlook_accounts",
+        "task": "app.tasks.email_sync_task.sync_all_outlook_accounts",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
 }
