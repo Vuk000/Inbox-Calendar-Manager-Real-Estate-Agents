@@ -1,111 +1,41 @@
 """
 AI Draft Agent - Generates email responses in agent's voice
-Uses Claude Sonnet 4.5 with style training
+Refactored to use shared prompts, types, and exceptions
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import logging
 from anthropic import Anthropic
+
 from ..config import settings
+from ..shared.prompts import build_draft_prompt, DRAFT_IMPROVEMENT_TEMPLATE, DRAFT_TONE_VARIANTS
+from ..shared.types import DraftVariant, AgentInfo
+from ..shared.exceptions import DraftGenerationException, AnthropicAPIException
+
+logger = logging.getLogger(__name__)
 
 
 class DraftAgent:
     """
     Generates personalized email drafts for real estate agents.
     Learns from agent's writing style and adapts responses.
+    
+    Refactored to use:
+    - Centralized prompts from shared.prompts
+    - Pydantic types from shared.types  
+    - Custom exceptions from shared.exceptions
     """
     
-    def __init__(self):
-        self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    def __init__(self, claude_client: Optional[Anthropic] = None):
+        """
+        Initialize draft agent.
+        
+        Args:
+            claude_client: Optional Anthropic client for dependency injection.
+                          If None, creates client from settings.
+        """
+        self.client = claude_client or Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = settings.ANTHROPIC_MODEL
-    
-    def _build_draft_prompt(
-        self,
-        original_email: Dict[str, Any],
-        agent_info: Dict[str, Any],
-        style_examples: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """Build prompt for draft generation"""
-        
-        # Extract email details
-        sender = original_email.get("sender_email", "Client")
-        sender_name = original_email.get("sender_name", sender)
-        subject = original_email.get("subject", "")
-        body = original_email.get("body", "")
-        thread = original_email.get("thread_context", "")
-        
-        # Agent details
-        agent_name = agent_info.get("full_name", "Agent")
-        agent_email = agent_info.get("email", "")
-        agent_phone = agent_info.get("phone_number", "")
-        
-        # Style analysis
-        style_section = ""
-        if style_examples:
-            style_section = f"""
-Writing Style Examples (from previous emails):
-{chr(10).join(f"Example {i+1}: {ex[:300]}" for i, ex in enumerate(style_examples[:3]))}
-
-Match this writing style: tone, formality, common phrases, email structure, and signature style.
-"""
-        
-        # Context section
-        context_section = ""
-        if context:
-            crm_data = context.get("crm_data", {})
-            market_data = context.get("market_data", {})
-            property_data = context.get("property_data", {})
-            
-            if crm_data:
-                context_section += f"\nCRM Context: {crm_data}"
-            if market_data:
-                context_section += f"\nMarket Data: {market_data}"
-            if property_data:
-                context_section += f"\nProperty Details: {property_data}"
-        
-        prompt = f"""You are drafting an email response on behalf of {agent_name}, a professional real estate agent.
-
-Original Email Thread:
-{thread}
-
-Latest Email from {sender_name} <{sender}>:
-Subject: {subject}
-{body}
-
-{style_section}
-
-{context_section}
-
-Agent Contact Info:
-Name: {agent_name}
-Email: {agent_email}
-Phone: {agent_phone}
-
-Instructions:
-1. Write a professional, personalized response that:
-   - Addresses all questions and concerns raised
-   - Maintains a warm, professional tone appropriate for real estate
-   - If it's a lead inquiry: Show enthusiasm, build rapport, suggest next steps (call, showing, etc.)
-   - If it's a negotiation: Be diplomatic, data-driven, professional
-   - If it's a showing request: Confirm availability, provide details, set expectations
-   - Uses real estate best practices and terminology
-   
-2. Structure:
-   - Friendly greeting using their name
-   - Acknowledge their message/questions
-   - Provide helpful, specific information
-   - Clear call-to-action or next steps
-   - Professional signature
-
-3. Keep it concise but thorough (2-4 paragraphs ideal)
-
-4. Match the agent's writing style if examples were provided
-
-5. Return ONLY the email body text, no subject line, no JSON, no markdown.
-
-Draft the email now:"""
-
-        return prompt
     
     async def generate_draft(
         self,
@@ -114,7 +44,7 @@ Draft the email now:"""
         style_examples: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
         num_variants: int = 1
-    ) -> List[Dict[str, Any]]:
+    ) -> List[DraftVariant]:
         """
         Generate email draft(s).
         
@@ -126,61 +56,82 @@ Draft the email now:"""
             num_variants: Number of draft variants to generate (1-3)
             
         Returns:
-            List of draft dictionaries with content and metadata
+            List of DraftVariant Pydantic models with content and metadata
+            
+        Raises:
+            DraftGenerationException: If draft generation fails
         """
-        drafts = []
+        drafts: List[DraftVariant] = []
         
         for i in range(min(num_variants, 3)):
             try:
-                prompt = self._build_draft_prompt(
-                    original_email, agent_info, style_examples, context
-                )
-                
-                # Add variation instruction for multiple drafts
+                # Determine tone for this variant
+                tone = None
                 if num_variants > 1:
-                    variation_prompts = [
-                        "Write this in a warm, friendly tone.",
-                        "Write this in a professional, formal tone.",
-                        "Write this in a concise, direct tone."
-                    ]
-                    prompt += f"\n\n{variation_prompts[i]}"
+                    tones = ["warm", "professional", "concise"]
+                    tone = tones[i]
+                
+                # Build prompt using centralized function
+                prompt = build_draft_prompt(
+                    original_email=original_email,
+                    agent_info=agent_info,
+                    style_examples=style_examples,
+                    context=context,
+                    tone=tone
+                )
                 
                 # Call Claude
-                message = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=settings.ANTHROPIC_MAX_TOKENS,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7 if num_variants > 1 else 0.5  # More variation for multiple drafts
-                )
+                try:
+                    message = self.client.messages.create(
+                        model=self.model,
+                        max_tokens=settings.ANTHROPIC_MAX_TOKENS,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7 if num_variants > 1 else 0.5  # More variation for multiple drafts
+                    )
+                except Exception as e:
+                    logger.error(f"Anthropic API error: {str(e)}")
+                    raise AnthropicAPIException(
+                        f"Failed to generate draft: {str(e)}",
+                        error_code="CLAUDE_DRAFT_ERROR"
+                    )
                 
                 draft_content = message.content[0].text.strip()
                 
                 # Calculate confidence (simplified)
                 confidence = 0.85 if style_examples else 0.70
                 
-                drafts.append({
-                    "variant_number": i + 1,
-                    "content": draft_content,
-                    "confidence_score": confidence,
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "model_version": self.model,
-                    "word_count": len(draft_content.split()),
-                    "has_call_to_action": any(
-                        phrase in draft_content.lower() 
-                        for phrase in ["call me", "let me know", "schedule", "meeting", "reach out"]
-                    )
-                })
+                # Create DraftVariant Pydantic model
+                draft = DraftVariant(
+                    variant_number=i + 1,
+                    content=draft_content,
+                    confidence_score=confidence,
+                    generated_at=datetime.utcnow().isoformat(),
+                    model_version=self.model,
+                    word_count=len(draft_content.split()),
+                    has_call_to_action=self._has_cta(draft_content)
+                )
+                
+                drafts.append(draft)
+                
+                logger.info(
+                    f"Generated draft variant {i+1}: {draft.word_count} words, "
+                    f"CTA={draft.has_call_to_action}, confidence={draft.confidence_score}"
+                )
+                
+            except AnthropicAPIException:
+                # Re-raise API exceptions
+                raise
                 
             except Exception as e:
-                drafts.append({
-                    "variant_number": i + 1,
-                    "content": "",
-                    "confidence_score": 0.0,
-                    "error": str(e),
-                    "generated_at": datetime.utcnow().isoformat()
-                })
+                logger.exception(f"Error generating draft variant {i+1}: {str(e)}")
+                # Add error variant
+                drafts.append(DraftVariant(
+                    variant_number=i + 1,
+                    content="",
+                    confidence_score=0.0,
+                    generated_at=datetime.utcnow().isoformat(),
+                    error=str(e)
+                ))
         
         return drafts
     
@@ -200,29 +151,61 @@ Draft the email now:"""
             
         Returns:
             Improved draft text
+            
+        Raises:
+            DraftGenerationException: If improvement fails
         """
-        prompt = f"""You previously drafted this email for {agent_info.get('full_name', 'the agent')}:
-
-{original_draft}
-
-The agent provided this feedback:
-{feedback}
-
-Please revise the draft according to the feedback while maintaining professionalism and clarity.
-
-Return ONLY the revised email text:"""
-
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=settings.ANTHROPIC_MAX_TOKENS,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+            prompt = DRAFT_IMPROVEMENT_TEMPLATE.format(
+                agent_name=agent_info.get('full_name', 'the agent'),
+                original_draft=original_draft,
+                feedback=feedback
             )
             
-            return message.content[0].text.strip()
+            try:
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=settings.ANTHROPIC_MAX_TOKENS,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+            except Exception as e:
+                logger.error(f"Anthropic API error during improvement: {str(e)}")
+                raise AnthropicAPIException(
+                    f"Failed to improve draft: {str(e)}",
+                    error_code="CLAUDE_IMPROVEMENT_ERROR"
+                )
+            
+            improved_draft = message.content[0].text.strip()
+            
+            logger.info(f"Improved draft based on feedback: {len(feedback)} chars of feedback")
+            
+            return improved_draft
+            
+        except AnthropicAPIException:
+            raise
             
         except Exception as e:
-            return f"Error regenerating draft: {str(e)}"
+            logger.exception(f"Error improving draft: {str(e)}")
+            raise DraftGenerationException(
+                f"Failed to improve draft: {str(e)}",
+                error_code="DRAFT_IMPROVEMENT_FAILED"
+            )
+    
+    def _has_cta(self, text: str) -> bool:
+        """
+        Check if draft has a call-to-action.
+        
+        Args:
+            text: Draft content
+            
+        Returns:
+            True if CTA detected
+        """
+        cta_phrases = [
+            "call me", "let me know", "schedule", "meeting", 
+            "reach out", "contact me", "get in touch", "reply",
+            "book a", "set up", "arrange"
+        ]
+        text_lower = text.lower()
+        return any(phrase in text_lower for phrase in cta_phrases)
 
