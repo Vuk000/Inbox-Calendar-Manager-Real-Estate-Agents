@@ -8,6 +8,9 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import sentry_sdk
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .db import init_db
 import time
@@ -30,11 +33,19 @@ async def lifespan(app: FastAPI):
     init_db()
     print("✅ Database initialized")
     
+    # Setup audit logging event listeners
+    from .security.audit import setup_audit_listeners
+    setup_audit_listeners()
+    print("✅ Audit listeners registered")
+    
     yield
     
     # Shutdown
     print("👋 Shutting down RealInbox AI...")
 
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -45,6 +56,10 @@ app = FastAPI(
     redoc_url=f"/api/{settings.API_VERSION}/redoc",
     lifespan=lifespan
 )
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # CORS Middleware
@@ -106,7 +121,7 @@ async def root():
 
 
 # Import and include routers
-from .routers import auth, emails, drafts, tasks, analytics, properties, integrations, webhooks, payments, websocket as ws_router
+from .routers import auth, emails, drafts, tasks, analytics, properties, integrations, webhooks, payments, privacy, websocket as ws_router
 
 app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
 app.include_router(emails.router, prefix=f"/api/{settings.API_VERSION}", tags=["Emails"])
@@ -117,6 +132,7 @@ app.include_router(properties.router, prefix=f"/api/{settings.API_VERSION}", tag
 app.include_router(integrations.router, prefix=f"/api/{settings.API_VERSION}", tags=["Integrations"])
 app.include_router(webhooks.router, prefix=f"/api/{settings.API_VERSION}", tags=["Webhooks"])
 app.include_router(payments.router, prefix=f"/api/{settings.API_VERSION}", tags=["Payments"])
+app.include_router(privacy.router, prefix=f"/api/{settings.API_VERSION}", tags=["Privacy & GDPR"])
 app.include_router(ws_router.router, tags=["WebSocket"])
 
 

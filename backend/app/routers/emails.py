@@ -1,27 +1,30 @@
 """
 Email management router - CRUD operations for emails
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from ..db import get_db
 from ..models.user import User
 from ..models.message import Message, MessagePriority, MessageCategory
 from ..models.email_account import EmailAccount
-from ..dependencies import get_current_user
+from ..dependencies import get_current_user, get_triage_agent
 from ..security.encryption import decrypt_data
 from ..security.audit import log_action
 from ..agents.triage_agent import TriageAgent
-from ..workers.email_sync import process_email_with_ai
+from ..tasks.email_sync_task import process_email_with_ai
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 # Pydantic schemas
