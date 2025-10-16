@@ -13,6 +13,7 @@ from ..config import settings
 from ..shared.prompts import build_triage_prompt
 from ..shared.types import EmailContent, TriageResult, EmailEntities
 from ..shared.exceptions import TriageException, AnthropicAPIException
+from ..utils.cache import cache_result
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class TriageAgent:
         self.client = claude_client or Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = settings.ANTHROPIC_MODEL
         
+    @cache_result(ttl=3600, prefix="triage")
     async def analyze_email(self, email_content: Dict[str, Any]) -> TriageResult:
         """
         Analyze email and return triage results.

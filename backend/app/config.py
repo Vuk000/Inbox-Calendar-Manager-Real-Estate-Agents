@@ -1,18 +1,20 @@
 """Application configuration management"""
 from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator, ValidationError
 from typing import List
 import os
+import sys
 
 
 class Settings(BaseSettings):
-    """Application settings with environment variable support"""
+    """Application settings with environment variable support and strict validation"""
     
     # Application
     APP_NAME: str = "RealInbox AI"
     APP_ENV: str = "development"
     DEBUG: bool = True
     API_VERSION: str = "v1"
-    SECRET_KEY: str
+    SECRET_KEY: str = Field(..., min_length=32)
     
     # Database
     DATABASE_URL: str
@@ -34,9 +36,16 @@ class Settings(BaseSettings):
     ENCRYPTION_SALT: str
     
     # Anthropic Claude
-    ANTHROPIC_API_KEY: str
+    ANTHROPIC_API_KEY: str = Field(..., min_length=20)
     ANTHROPIC_MODEL: str = "claude-sonnet-4.5-20250514"
     ANTHROPIC_MAX_TOKENS: int = 4096
+    
+    @field_validator('ANTHROPIC_API_KEY')
+    @classmethod
+    def validate_anthropic_key(cls, v: str) -> str:
+        if not v.startswith('sk-ant-'):
+            raise ValueError('ANTHROPIC_API_KEY must start with sk-ant-')
+        return v
     
     # Pinecone
     PINECONE_API_KEY: str
@@ -132,6 +141,16 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-# Global settings instance
-settings = Settings()
+# Global settings instance with validation
+try:
+    settings = Settings()
+except ValidationError as e:
+    print("❌ Configuration Error: Missing or invalid environment variables!")
+    print("\nDetails:")
+    for error in e.errors():
+        field = error['loc'][0]
+        msg = error['msg']
+        print(f"  - {field}: {msg}")
+    print("\n📝 Please check your .env file and ENV_TEMPLATE.md for required variables.")
+    sys.exit(1)
 

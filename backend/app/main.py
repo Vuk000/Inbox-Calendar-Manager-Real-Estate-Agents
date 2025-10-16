@@ -121,7 +121,7 @@ async def root():
 
 
 # Import and include routers
-from .routers import auth, emails, drafts, tasks, analytics, properties, integrations, webhooks, payments, privacy, metrics, websocket as ws_router
+from .routers import auth, emails, drafts, tasks, analytics, properties, integrations, webhooks, payments, privacy, metrics, health, websocket as ws_router
 
 app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
 app.include_router(emails.router, prefix=f"/api/{settings.API_VERSION}", tags=["Emails"])
@@ -134,6 +134,7 @@ app.include_router(webhooks.router, prefix=f"/api/{settings.API_VERSION}", tags=
 app.include_router(payments.router, prefix=f"/api/{settings.API_VERSION}", tags=["Payments"])
 app.include_router(privacy.router, prefix=f"/api/{settings.API_VERSION}", tags=["Privacy & GDPR"])
 app.include_router(metrics.router, tags=["Metrics"])
+app.include_router(health.router)
 app.include_router(ws_router.router, tags=["WebSocket"])
 
 

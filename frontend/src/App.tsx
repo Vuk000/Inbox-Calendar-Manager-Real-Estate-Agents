@@ -1,21 +1,32 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import DashboardPage from './pages/DashboardPage'
-import InboxPage from './pages/InboxPage'
-import DraftsPage from './pages/DraftsPage'
-import TasksPage from './pages/TasksPage'
-import PropertiesPage from './pages/PropertiesPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import SettingsPage from './pages/SettingsPage'
 import Layout from './components/Layout'
+
+// Lazy load pages for better performance
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const InboxPage = lazy(() => import('./pages/InboxPage'))
+const DraftsPage = lazy(() => import('./pages/DraftsPage'))
+const TasksPage = lazy(() => import('./pages/TasksPage'))
+const PropertiesPage = lazy(() => import('./pages/PropertiesPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+  </div>
+)
 
 function App() {
   const { isAuthenticated } = useAuthStore()
 
   return (
-    <Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
       {/* Public routes */}
       <Route 
         path="/login" 
@@ -43,7 +54,8 @@ function App() {
 
       {/* Catch-all redirect */}
       <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 
