@@ -29,7 +29,7 @@ if settings.SENTRY_DSN:
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print("🚀 Starting RealInbox AI...")
+    print("🚀 Starting Project Apex...")
     init_db()
     print("✅ Database initialized")
     
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    print("👋 Shutting down RealInbox AI...")
+    print("👋 Shutting down Project Apex...")
 
 
 # Initialize rate limiter
@@ -50,8 +50,8 @@ limiter = Limiter(key_func=get_remote_address)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
-    description="AI-powered inbox manager for real estate agents",
-    version="1.0.0",
+    description="Production-grade Real Estate CRM with AI-powered inbox management, transaction pipeline, and lead generation",
+    version="2.0.0",
     docs_url=f"/api/{settings.API_VERSION}/docs",
     redoc_url=f"/api/{settings.API_VERSION}/redoc",
     lifespan=lifespan
@@ -121,7 +121,12 @@ async def root():
 
 
 # Import and include routers
-from .routers import auth, emails, drafts, tasks, analytics, properties, integrations, webhooks, payments, privacy, metrics, health, websocket as ws_router
+from .routers import (
+    auth, emails, drafts, tasks, analytics, properties, integrations,
+    webhooks, payments, privacy, metrics, health, websocket as ws_router,
+    # New Project Apex routers
+    contacts, teams, ai_actions, communications
+)
 
 app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
 app.include_router(emails.router, prefix=f"/api/{settings.API_VERSION}", tags=["Emails"])
@@ -136,6 +141,12 @@ app.include_router(privacy.router, prefix=f"/api/{settings.API_VERSION}", tags=[
 app.include_router(metrics.router, tags=["Metrics"])
 app.include_router(health.router)
 app.include_router(ws_router.router, tags=["WebSocket"])
+
+# Project Apex CRM routers
+app.include_router(contacts.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Contacts"])
+app.include_router(teams.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Teams"])
+app.include_router(ai_actions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - AI Actions"])
+app.include_router(communications.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Communications"])
 
 
 if __name__ == "__main__":

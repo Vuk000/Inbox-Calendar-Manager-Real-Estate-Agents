@@ -31,6 +31,7 @@ msal==1.25.0
 PyPDF2==3.0.1
 python-docx==1.1.0
 boto3==1.33.6  # AWS S3
+pandas==2.1.4  # CSV processing
 
 # Communication
 twilio==8.10.3

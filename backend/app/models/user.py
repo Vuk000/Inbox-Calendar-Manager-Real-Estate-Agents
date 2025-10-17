@@ -78,6 +78,16 @@ class User(Base):
     analytics = relationship("Analytics", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
     
+    # New CRM relationships
+    owned_team = relationship("Team", back_populates="owner", foreign_keys="Team.owner_id", uselist=False)
+    team_memberships = relationship("TeamMember", back_populates="user", foreign_keys="TeamMember.user_id")
+    contacts = relationship("Contact", back_populates="user", foreign_keys="Contact.user_id")
+    transactions = relationship("Transaction", back_populates="user")
+    communications = relationship("CommunicationLog", back_populates="user")
+    notes = relationship("Note", back_populates="user")
+    ai_actions = relationship("AIAction", back_populates="user")
+    landing_pages = relationship("LandingPage", back_populates="user")
+    
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
 

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings with environment variable support and strict validation"""
     
     # Application
-    APP_NAME: str = "RealInbox AI"
+    APP_NAME: str = "Project Apex - Real Estate CRM"
     APP_ENV: str = "development"
     DEBUG: bool = True
     API_VERSION: str = "v1"

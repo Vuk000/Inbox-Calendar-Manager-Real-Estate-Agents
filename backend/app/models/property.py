@@ -64,6 +64,8 @@ class Property(Base):
     # Relationships
     messages = relationship("Message", back_populates="property")
     tasks = relationship("Task", back_populates="property")
+    transactions = relationship("Transaction", back_populates="property")
+    notes_list = relationship("Note", back_populates="property", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Property(id={self.id}, address={self.address}, mls_id={self.mls_id})>"

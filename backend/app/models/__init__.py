@@ -9,6 +9,15 @@ from .analytics import Analytics
 from .audit_log import AuditLog
 from .social_account import SocialAccount
 
+# New CRM models
+from .team import Team, TeamMember
+from .contact import Contact
+from .communication_log import CommunicationLog
+from .transaction import Transaction
+from .note import Note
+from .ai_action import AIAction
+from .landing_page import LandingPage
+
 __all__ = [
     "User",
     "EmailAccount",
@@ -19,5 +28,14 @@ __all__ = [
     "Analytics",
     "AuditLog",
     "SocialAccount",
+    # New CRM models
+    "Team",
+    "TeamMember",
+    "Contact",
+    "CommunicationLog",
+    "Transaction",
+    "Note",
+    "AIAction",
+    "LandingPage",
 ]
 

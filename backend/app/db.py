@@ -35,6 +35,9 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db():
     """Initialize database - create all tables"""
-    from .models import user, email_account, message, draft, property, task, analytics, audit_log, social_account
+    from .models import (
+        user, email_account, message, draft, property, task, analytics, audit_log, social_account,
+        team, contact, communication_log, transaction, note, ai_action, landing_page
+    )
     Base.metadata.create_all(bind=engine)
 

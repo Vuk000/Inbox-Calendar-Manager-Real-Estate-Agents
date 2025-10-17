@@ -34,6 +34,8 @@ class Task(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
     property_id = Column(Integer, ForeignKey("properties.id"), nullable=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True, index=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True, index=True)
     
     # Task details
     task_type = Column(SQLEnum(TaskType), nullable=False)
@@ -70,6 +72,8 @@ class Task(Base):
     user = relationship("User", back_populates="tasks")
     message = relationship("Message", back_populates="tasks")
     property = relationship("Property", back_populates="tasks")
+    transaction = relationship("Transaction", back_populates="tasks")
+    contact = relationship("Contact", foreign_keys=[contact_id])
     
     def __repr__(self):
         return f"<Task(id={self.id}, title={self.title}, type={self.task_type}, status={self.status})>"
