@@ -211,3 +211,136 @@ export const integrationService = {
   }
 }
 
+// CRM Services
+export const contactsService = {
+  listContacts: async (params?: {
+    skip?: number
+    limit?: number
+    search?: string
+    contact_type?: string
+    contact_status?: string
+    tags?: string
+  }) => {
+    const response = await api.get('/contacts', { params })
+    return response.data
+  },
+
+  getContact: async (id: number) => {
+    const response = await api.get(`/contacts/${id}`)
+    return response.data
+  },
+
+  createContact: async (data: any) => {
+    const response = await api.post('/contacts', data)
+    return response.data
+  },
+
+  updateContact: async (id: number, data: any) => {
+    const response = await api.put(`/contacts/${id}`, data)
+    return response.data
+  },
+
+  deleteContact: async (id: number) => {
+    await api.delete(`/contacts/${id}`)
+  },
+
+  getContactTimeline: async (id: number, limit = 50) => {
+    const response = await api.get(`/contacts/${id}/timeline`, { params: { limit } })
+    return response.data
+  },
+
+  importCSV: async (file: File, fieldMapping: Record<string, string>) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await api.post('/contacts/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: {
+        field_mapping: JSON.stringify(fieldMapping)
+      }
+    })
+    return response.data
+  },
+
+  shareContact: async (id: number, teamId: number) => {
+    const response = await api.post(`/contacts/${id}/share`, { team_id: teamId })
+    return response.data
+  }
+}
+
+export const communicationsService = {
+  listCommunications: async (params?: {
+    contact_id?: number
+    communication_type?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+  }) => {
+    const response = await api.get('/communications', { params })
+    return response.data
+  },
+
+  getStats: async (contactId: number) => {
+    const response = await api.get('/communications/stats', { params: { contact_id: contactId } })
+    return response.data
+  },
+
+  linkMessage: async (messageId: number, contactId: number) => {
+    const response = await api.post('/communications/link-message', 
+      { contact_id: contactId },
+      { params: { message_id: messageId } }
+    )
+    return response.data
+  }
+}
+
+export const transactionsService = {
+  listTransactions: async (params?: {
+    skip?: number
+    limit?: number
+    stage?: string
+    transaction_type?: string
+    contact_id?: number
+    search?: string
+  }) => {
+    const response = await api.get('/transactions', { params })
+    return response.data
+  },
+
+  getTransaction: async (id: number) => {
+    const response = await api.get(`/transactions/${id}`)
+    return response.data
+  },
+
+  createTransaction: async (data: any) => {
+    const response = await api.post('/transactions', data)
+    return response.data
+  },
+
+  updateTransaction: async (id: number, data: any) => {
+    const response = await api.put(`/transactions/${id}`, data)
+    return response.data
+  },
+
+  deleteTransaction: async (id: number) => {
+    await api.delete(`/transactions/${id}`)
+  },
+
+  updateStage: async (id: number, stage: string, outcome_reason?: string) => {
+    const response = await api.put(`/transactions/${id}/stage`, { stage, outcome_reason })
+    return response.data
+  },
+
+  getTimeline: async (id: number) => {
+    const response = await api.get(`/transactions/${id}/timeline`)
+    return response.data
+  },
+
+  getStats: async () => {
+    const response = await api.get('/transactions/stats')
+    return response.data
+  }
+}
+

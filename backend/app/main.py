@@ -125,7 +125,7 @@ from .routers import (
     auth, emails, drafts, tasks, analytics, properties, integrations,
     webhooks, payments, privacy, metrics, health, websocket as ws_router,
     # New Project Apex routers
-    contacts, teams, ai_actions, communications
+    contacts, teams, ai_actions, communications, transactions
 )
 
 app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
@@ -147,6 +147,7 @@ app.include_router(contacts.router, prefix=f"/api/{settings.API_VERSION}", tags=
 app.include_router(teams.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Teams"])
 app.include_router(ai_actions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - AI Actions"])
 app.include_router(communications.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Communications"])
+app.include_router(transactions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Transactions"])
 
 
 if __name__ == "__main__":

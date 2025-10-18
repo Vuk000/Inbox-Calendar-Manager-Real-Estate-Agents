@@ -7,7 +7,8 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '../stores/authStore'
 import { authService } from '../services/api'
@@ -15,6 +16,7 @@ import { authService } from '../services/api'
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Inbox', href: '/inbox', icon: InboxIcon },
+  { name: 'Contacts', href: '/contacts', icon: UserGroupIcon },
   { name: 'Drafts', href: '/drafts', icon: DocumentTextIcon },
   { name: 'Tasks', href: '/tasks', icon: CheckCircleIcon },
   { name: 'Properties', href: '/properties', icon: BuildingOfficeIcon },
@@ -97,7 +99,7 @@ export default function Layout() {
         {/* Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8">
           <h2 className="text-2xl font-semibold text-gray-900">
-            {navigation.find(item => item.href === location.pathname)?.name || 'Dashboard'}
+            {navigation.find(item => location.pathname.startsWith(item.href))?.name || 'Dashboard'}
           </h2>
           
           {/* User tier badge */}

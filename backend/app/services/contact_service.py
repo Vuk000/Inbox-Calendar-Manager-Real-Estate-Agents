@@ -238,6 +238,214 @@ class ContactService:
         ).limit(limit).all()
     
     @staticmethod
+    def get_or_create_contact_by_email(
+        db: Session,
+        email: str,
+        user_id: int,
+        sender_name: Optional[str] = None
+    ) -> Contact:
+        """
+        Get existing contact by email or create a new one
+        
+        Args:
+            db: Database session
+            email: Email address
+            user_id: User ID
+            sender_name: Full name from email sender (optional)
+            
+        Returns:
+            Contact object (existing or newly created)
+        """
+        # Try to find existing contact
+        contact = db.query(Contact).filter(
+            Contact.user_id == user_id,
+            Contact.email == email
+        ).first()
+        
+        if contact:
+            return contact
+        
+        # Extract first and last name from sender_name
+        first_name = "Unknown"
+        last_name = None
+        
+        if sender_name:
+            # Remove email address if present in name
+            name_clean = sender_name.split('<')[0].strip().strip('"').strip("'")
+            name_parts = name_clean.split()
+            
+            if len(name_parts) >= 1:
+                first_name = name_parts[0]
+            if len(name_parts) >= 2:
+                last_name = ' '.join(name_parts[1:])
+        
+        # Create new contact
+        contact = Contact(
+            user_id=user_id,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            contact_type="lead",
+            contact_status="active",
+            lead_source="email"
+        )
+        
+        db.add(contact)
+        db.commit()
+        db.refresh(contact)
+        
+        logger.info(f"Auto-created contact {contact.id} for email {email}")
+        return contact
+    
+    @staticmethod
+    def get_or_create_contact_by_phone(
+        db: Session,
+        phone: str,
+        user_id: int,
+        name: Optional[str] = None
+    ) -> Contact:
+        """
+        Get existing contact by phone or create a new one
+        
+        Args:
+            db: Database session
+            phone: Phone number
+            user_id: User ID
+            name: Contact name (optional)
+            
+        Returns:
+            Contact object (existing or newly created)
+        """
+        # Try to find existing contact
+        contact = db.query(Contact).filter(
+            Contact.user_id == user_id,
+            or_(
+                Contact.phone == phone,
+                Contact.secondary_phone == phone
+            )
+        ).first()
+        
+        if contact:
+            return contact
+        
+        # Extract name
+        first_name = "Unknown"
+        last_name = None
+        
+        if name:
+            name_parts = name.split()
+            if len(name_parts) >= 1:
+                first_name = name_parts[0]
+            if len(name_parts) >= 2:
+                last_name = ' '.join(name_parts[1:])
+        
+        # Create new contact
+        contact = Contact(
+            user_id=user_id,
+            phone=phone,
+            first_name=first_name,
+            last_name=last_name,
+            contact_type="lead",
+            contact_status="active",
+            lead_source="sms"
+        )
+        
+        db.add(contact)
+        db.commit()
+        db.refresh(contact)
+        
+        logger.info(f"Auto-created contact {contact.id} for phone {phone}")
+        return contact
+    
+    @staticmethod
+    def merge_contacts(
+        db: Session,
+        primary_id: int,
+        duplicate_id: int,
+        user_id: int
+    ) -> Optional[Contact]:
+        """
+        Merge duplicate contact into primary contact
+        
+        Args:
+            db: Database session
+            primary_id: Primary contact ID (keep this one)
+            duplicate_id: Duplicate contact ID (will be deleted)
+            user_id: User ID
+            
+        Returns:
+            Updated primary contact or None if failed
+        """
+        try:
+            # Get both contacts
+            primary = ContactService.get_contact(db, primary_id, user_id)
+            duplicate = ContactService.get_contact(db, duplicate_id, user_id)
+            
+            if not primary or not duplicate:
+                logger.warning(f"Cannot merge: contacts not found")
+                return None
+            
+            # Check ownership
+            if primary.user_id != user_id or duplicate.user_id != user_id:
+                raise ValidationException("Cannot merge contacts you don't own")
+            
+            # Merge data: fill in missing fields from duplicate
+            if not primary.email and duplicate.email:
+                primary.email = duplicate.email
+            if not primary.phone and duplicate.phone:
+                primary.phone = duplicate.phone
+            if not primary.secondary_phone and duplicate.secondary_phone:
+                primary.secondary_phone = duplicate.secondary_phone
+            if not primary.company and duplicate.company:
+                primary.company = duplicate.company
+            if not primary.job_title and duplicate.job_title:
+                primary.job_title = duplicate.job_title
+            
+            # Merge tags
+            primary_tags = set(primary.tags or [])
+            duplicate_tags = set(duplicate.tags or [])
+            primary.tags = list(primary_tags.union(duplicate_tags))
+            
+            # Reassign all communications from duplicate to primary
+            from ..models.communication_log import CommunicationLog
+            db.query(CommunicationLog).filter(
+                CommunicationLog.contact_id == duplicate_id
+            ).update({CommunicationLog.contact_id: primary_id})
+            
+            # Reassign all transactions from duplicate to primary
+            from ..models.transaction import Transaction
+            db.query(Transaction).filter(
+                Transaction.contact_id == duplicate_id
+            ).update({Transaction.contact_id: primary_id})
+            
+            # Reassign all notes from duplicate to primary
+            from ..models.note import Note
+            db.query(Note).filter(
+                Note.contact_id == duplicate_id
+            ).update({Note.contact_id: primary_id})
+            
+            # Update relationship score and frequency
+            primary.contact_frequency = (primary.contact_frequency or 0) + (duplicate.contact_frequency or 0)
+            
+            # Keep the more recent last contact date
+            if duplicate.last_contact_date:
+                if not primary.last_contact_date or duplicate.last_contact_date > primary.last_contact_date:
+                    primary.last_contact_date = duplicate.last_contact_date
+            
+            # Delete duplicate
+            db.delete(duplicate)
+            db.commit()
+            db.refresh(primary)
+            
+            logger.info(f"Merged contact {duplicate_id} into {primary_id}")
+            return primary
+            
+        except Exception as e:
+            logger.error(f"Error merging contacts: {str(e)}")
+            db.rollback()
+            raise ValidationException(f"Failed to merge contacts: {str(e)}")
+    
+    @staticmethod
     def detect_duplicates(
         db: Session,
         user_id: int,

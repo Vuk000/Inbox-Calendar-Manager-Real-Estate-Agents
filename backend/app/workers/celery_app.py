@@ -32,12 +32,21 @@ celery_app.conf.update(
 # Periodic tasks schedule
 celery_app.conf.beat_schedule = {
     "sync-all-gmail-accounts": {
-        "task": "app.tasks.email_sync_task.sync_all_gmail_accounts",
+        "task": "app.workers.email_sync.sync_all_gmail_accounts",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
     "sync-all-outlook-accounts": {
-        "task": "app.tasks.email_sync_task.sync_all_outlook_accounts",
+        "task": "app.workers.email_sync.sync_all_outlook_accounts",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
+    },
+    # Relationship scoring tasks
+    "update-all-relationship-scores": {
+        "task": "app.workers.relationship_scoring.update_all_active_contacts",
+        "schedule": crontab(hour=2, minute=0),  # Daily at 2 AM
+    },
+    "update-scores-recent-activity": {
+        "task": "app.workers.relationship_scoring.update_scores_for_recent_communications",
+        "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
     },
 }
 

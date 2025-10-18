@@ -13,6 +13,8 @@ const TasksPage = lazy(() => import('./pages/TasksPage'))
 const PropertiesPage = lazy(() => import('./pages/PropertiesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ContactsPage = lazy(() => import('./pages/ContactsPage'))
+const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -50,6 +52,8 @@ function App() {
         <Route path="properties" element={<PropertiesPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="contacts" element={<ContactsPage />} />
+        <Route path="contacts/:id" element={<ContactDetailPage />} />
       </Route>
 
       {/* Catch-all redirect */}
