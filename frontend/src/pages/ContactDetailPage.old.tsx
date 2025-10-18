@@ -15,33 +15,21 @@ import {
   PencilIcon,
 } from '@heroicons/react/24/outline'
 import { CommunicationLog, CommunicationType } from '../types/communication'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
-import { VerticalTimeline, VerticalTimelineElement } from 'react-vertical-timeline-component'
-import 'react-vertical-timeline-component/style.min.css'
-import { useState } from 'react'
-import { useInView } from 'react-intersection-observer'
 
-const communicationConfig: Record<CommunicationType, { icon: any; color: string; bgColor: string }> = {
-  email: { icon: EnvelopeIcon, color: '#2563eb', bgColor: '#eff6ff' },
-  sms: { icon: ChatBubbleLeftIcon, color: '#10b981', bgColor: '#d1fae5' },
-  whatsapp: { icon: ChatBubbleLeftIcon, color: '#10b981', bgColor: '#d1fae5' },
-  phone_call: { icon: PhoneIcon, color: '#f59e0b', bgColor: '#fef3c7' },
-  meeting: { icon: CalendarIcon, color: '#8b5cf6', bgColor: '#ede9fe' },
-  note: { icon: DocumentTextIcon, color: '#eab308', bgColor: '#fef9c3' },
-  twitter_dm: { icon: ChatBubbleLeftIcon, color: '#3b82f6', bgColor: '#dbeafe' },
-  facebook_messenger: { icon: ChatBubbleLeftIcon, color: '#3b82f6', bgColor: '#dbeafe' },
+const communicationIcons: Record<CommunicationType, any> = {
+  email: EnvelopeIcon,
+  sms: ChatBubbleLeftIcon,
+  whatsapp: ChatBubbleLeftIcon,
+  phone_call: PhoneIcon,
+  meeting: CalendarIcon,
+  note: DocumentTextIcon,
+  twitter_dm: ChatBubbleLeftIcon,
+  facebook_messenger: ChatBubbleLeftIcon,
 }
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
   const contactId = parseInt(id || '0')
-  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set())
-
-  // Intersection observer for infinite scroll
-  const { ref: loadMoreRef, inView } = useInView({
-    threshold: 0,
-  })
 
   // Fetch contact details
   const { data: contact, isLoading: loadingContact } = useQuery({
@@ -82,37 +70,15 @@ export default function ContactDetailPage() {
 
   const communications = timeline?.communications || []
 
-  const getRelationshipScoreColor = (score: number) => {
-    if (score >= 80) return { path: '#10b981', text: '#10b981', trail: '#d1fae5' }
-    if (score >= 50) return { path: '#f59e0b', text: '#f59e0b', trail: '#fef3c7' }
-    return { path: '#6b7280', text: '#6b7280', trail: '#f3f4f6' }
+  const getRelationshipColor = (score: number) => {
+    if (score >= 80) return 'text-green-600'
+    if (score >= 50) return 'text-yellow-600'
+    return 'text-gray-600'
   }
 
-  const getSentimentEmoji = (score: number | null) => {
-    if (score === null) return '😐'
-    if (score > 0.3) return '😊'
-    if (score < -0.3) return '😞'
-    return '😐'
+  const getDirectionColor = (direction: string) => {
+    return direction === 'inbound' ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-gray-50'
   }
-
-  const getSentimentColor = (score: number | null) => {
-    if (score === null) return 'text-gray-500'
-    if (score > 0.3) return 'text-green-600'
-    if (score < -0.3) return 'text-red-600'
-    return 'text-gray-500'
-  }
-
-  const toggleExpanded = (id: number) => {
-    const newExpanded = new Set(expandedItems)
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id)
-    } else {
-      newExpanded.add(id)
-    }
-    setExpandedItems(newExpanded)
-  }
-
-  const scoreColors = getRelationshipScoreColor(contact.relationship_score)
 
   return (
     <div className="space-y-6">
@@ -125,13 +91,13 @@ export default function ContactDetailPage() {
       {/* Contact Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-start justify-between">
-          <div className="flex items-start space-x-4 flex-1">
+          <div className="flex items-start space-x-4">
             <div className="flex-shrink-0 h-20 w-20 rounded-full bg-primary-100 flex items-center justify-center">
               <span className="text-primary-700 font-bold text-2xl">
                 {contact.first_name[0]}{contact.last_name?.[0] || ''}
               </span>
             </div>
-            <div className="flex-1">
+            <div>
               <h1 className="text-3xl font-bold text-gray-900">
                 {contact.first_name} {contact.last_name}
               </h1>
@@ -164,23 +130,11 @@ export default function ContactDetailPage() {
               )}
             </div>
           </div>
-          
-          {/* Animated Relationship Score Gauge */}
-          <div className="flex items-center space-x-6">
-            <div className="text-center">
-              <div className="text-sm text-gray-500 mb-2">Relationship Score</div>
-              <div style={{ width: 120, height: 120 }}>
-                <CircularProgressbar
-                  value={contact.relationship_score}
-                  text={`${Math.round(contact.relationship_score)}`}
-                  styles={buildStyles({
-                    pathColor: scoreColors.path,
-                    textColor: scoreColors.text,
-                    trailColor: scoreColors.trail,
-                    textSize: '20px',
-                    pathTransitionDuration: 1.5,
-                  })}
-                />
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <div className="text-sm text-gray-500">Relationship Score</div>
+              <div className={`text-4xl font-bold ${getRelationshipColor(contact.relationship_score)}`}>
+                {Math.round(contact.relationship_score)}
               </div>
             </div>
             <Link to={`/contacts/${contactId}/edit`} className="btn-secondary">
@@ -222,7 +176,7 @@ export default function ContactDetailPage() {
         )}
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -231,9 +185,8 @@ export default function ContactDetailPage() {
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="text-sm text-gray-500">Avg Sentiment</div>
-            <div className="text-2xl font-bold text-gray-900 mt-1 flex items-center">
+            <div className="text-2xl font-bold text-gray-900 mt-1">
               {stats.avg_sentiment !== null ? stats.avg_sentiment.toFixed(1) : 'N/A'}
-              <span className="ml-2 text-xl">{getSentimentEmoji(stats.avg_sentiment)}</span>
             </div>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -251,11 +204,11 @@ export default function ContactDetailPage() {
         </div>
       )}
 
-      {/* THE KILLER TIMELINE - Folio-inspired Visual Excellence */}
+      {/* Timeline */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Communication Timeline</h2>
-          <p className="text-sm text-gray-600 mt-1">Every interaction, beautifully unified</p>
+          <p className="text-sm text-gray-600 mt-1">All interactions with this contact</p>
         </div>
 
         <div className="p-6">
@@ -269,76 +222,60 @@ export default function ContactDetailPage() {
               <p className="mt-4">No communications yet</p>
             </div>
           ) : (
-            <VerticalTimeline layout="1-column-left" lineColor="#e5e7eb">
+            <div className="space-y-4">
               {communications.map((comm: CommunicationLog) => {
-                const config = communicationConfig[comm.communication_type]
-                const Icon = config.icon
-                const isExpanded = expandedItems.has(comm.id)
-
+                const Icon = communicationIcons[comm.communication_type] || ChatBubbleLeftIcon
                 return (
-                  <VerticalTimelineElement
+                  <div
                     key={comm.id}
-                    date={format(new Date(comm.occurred_at), 'MMM d, yyyy h:mm a')}
-                    iconStyle={{ background: config.color, color: '#fff' }}
-                    icon={<Icon />}
-                    contentStyle={{
-                      background: config.bgColor,
-                      border: `2px solid ${config.color}`,
-                      borderRadius: '8px',
-                      boxShadow: '0 3px 0 ' + config.color,
-                      cursor: 'pointer',
-                    }}
-                    contentArrowStyle={{ borderRight: `7px solid ${config.color}` }}
-                    onClick={() => toggleExpanded(comm.id)}
+                    className={`border-l-4 ${getDirectionColor(comm.direction)} rounded-lg p-4`}
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium uppercase" style={{ color: config.color }}>
-                          {comm.communication_type.replace('_', ' ')} • {comm.direction}
-                        </span>
-                        {comm.sentiment_score !== null && (
-                          <span className={`text-lg ${getSentimentColor(comm.sentiment_score)}`}>
-                            {getSentimentEmoji(comm.sentiment_score)}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {comm.subject && (
-                        <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                          {comm.subject}
-                        </h4>
-                      )}
-                      
-                      {comm.summary && (
-                        <p className={`text-sm text-gray-700 ${!isExpanded ? 'line-clamp-2' : ''}`}>
-                          {comm.summary}
-                        </p>
-                      )}
-                      
-                      {isExpanded && comm.summary && (
-                        <div className="mt-2 pt-2 border-t border-gray-300">
-                          <div className="text-xs text-gray-600 space-y-1">
-                            {comm.from_address && <div>From: {comm.from_address}</div>}
-                            {comm.to_address && <div>To: {comm.to_address}</div>}
-                            {comm.urgency_score !== null && (
-                              <div>Urgency: {Math.round(comm.urgency_score)}/100</div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-3 flex-1">
+                        <div className="flex-shrink-0 p-2 bg-white rounded-lg border border-gray-200">
+                          <Icon className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-medium text-gray-500 uppercase">
+                              {comm.communication_type.replace('_', ' ')}
+                            </span>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-xs text-gray-500 capitalize">
+                              {comm.direction}
+                            </span>
+                          </div>
+                          {comm.subject && (
+                            <h4 className="text-sm font-medium text-gray-900 mt-1">
+                              {comm.subject}
+                            </h4>
+                          )}
+                          {comm.summary && (
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {comm.summary}
+                            </p>
+                          )}
+                          <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                            {comm.from_address && (
+                              <span>From: {comm.from_address}</span>
+                            )}
+                            {comm.sentiment_score !== null && (
+                              <span>
+                                Sentiment: {comm.sentiment_score > 0 ? '😊' : comm.sentiment_score < 0 ? '😞' : '😐'}
+                              </span>
                             )}
                           </div>
                         </div>
-                      )}
-                      
-                      <div className="text-xs text-gray-500 mt-2">
-                        {isExpanded ? 'Click to collapse' : 'Click to expand'}
+                      </div>
+                      <div className="text-sm text-gray-500 ml-4 flex-shrink-0">
+                        {format(new Date(comm.occurred_at), 'MMM d, yyyy h:mm a')}
                       </div>
                     </div>
-                  </VerticalTimelineElement>
+                  </div>
                 )
               })}
-            </VerticalTimeline>
+            </div>
           )}
-
-          {/* Load more trigger (for future infinite scroll) */}
-          <div ref={loadMoreRef} className="h-4"></div>
         </div>
       </div>
 

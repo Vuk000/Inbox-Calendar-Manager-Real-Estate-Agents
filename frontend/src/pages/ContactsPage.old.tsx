@@ -8,27 +8,22 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   ArrowUpTrayIcon,
+  FunnelIcon,
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import ContactImportModal from '../components/ContactImportModal'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
-import { useDebounce } from '../hooks/useDebounce'
 
 export default function ContactsPage() {
-  const [searchInput, setSearchInput] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [contactType, setContactType] = useState<string>('')
   const [contactStatus, setContactStatus] = useState<string>('')
   const [showImportModal, setShowImportModal] = useState(false)
   
-  // Debounce search term (300ms delay for better UX)
-  const searchTerm = useDebounce(searchInput, 300)
-  
   const queryClient = useQueryClient()
 
-  // Fetch contacts with debounced search
+  // Fetch contacts
   const { data, isLoading, error } = useQuery({
     queryKey: ['contacts', searchTerm, contactType, contactStatus],
     queryFn: () => contactsService.listContacts({
@@ -58,13 +53,11 @@ export default function ContactsPage() {
     }
   }
 
-  const getRelationshipScoreColor = (score: number): { path: string; text: string; trail: string } => {
-    if (score >= 80) return { path: '#10b981', text: '#10b981', trail: '#d1fae5' } // Green
-    if (score >= 50) return { path: '#f59e0b', text: '#f59e0b', trail: '#fef3c7' } // Yellow
-    return { path: '#6b7280', text: '#6b7280', trail: '#f3f4f6' } // Gray
+  const getRelationshipColor = (score: number) => {
+    if (score >= 80) return 'text-green-600 bg-green-50'
+    if (score >= 50) return 'text-yellow-600 bg-yellow-50'
+    return 'text-gray-600 bg-gray-50'
   }
-
-  const isSearching = searchInput !== searchTerm
 
   return (
     <div className="space-y-6">
@@ -76,7 +69,7 @@ export default function ContactsPage() {
             Contacts
           </h1>
           <p className="mt-2 text-gray-600">
-            Your relationship command center
+            Manage your clients, leads, and professional network
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -87,37 +80,28 @@ export default function ContactsPage() {
             <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
             Import CSV
           </button>
-          <Link to="/contacts/new" className="btn-primary flex items-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800">
+          <Link to="/contacts/new" className="btn-primary flex items-center">
             <PlusIcon className="h-5 w-5 mr-2" />
             Add Contact
           </Link>
         </div>
       </div>
 
-      {/* Enhanced Filters */}
+      {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Advanced Search with loading indicator */}
           <div className="md:col-span-2">
             <div className="relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search contacts..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              {isSearching && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                </div>
-              )}
             </div>
-            <p className="text-xs text-gray-500 mt-1">Search by name, email, phone, or company</p>
           </div>
-          
-          {/* Contact Type Filter */}
           <div>
             <select
               value={contactType}
@@ -132,8 +116,6 @@ export default function ContactsPage() {
               <option value="vendor">Vendor</option>
             </select>
           </div>
-          
-          {/* Contact Status Filter */}
           <div>
             <select
               value={contactStatus}
@@ -194,88 +176,71 @@ export default function ContactsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {contacts.map((contact: Contact) => {
-                const scoreColors = getRelationshipScoreColor(contact.relationship_score)
-                return (
-                  <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Link to={`/contacts/${contact.id}`} className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                          <span className="text-primary-700 font-medium">
-                            {contact.first_name[0]}{contact.last_name?.[0] || ''}
-                          </span>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 hover:text-primary-600">
-                            {contact.first_name} {contact.last_name}
-                          </div>
-                          {contact.company && (
-                            <div className="text-sm text-gray-500">{contact.company}</div>
-                          )}
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{contact.email || '-'}</div>
-                      <div className="text-sm text-gray-500">{contact.phone || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
-                        {contact.contact_type || 'Other'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {/* Enhanced Circular Gauge */}
-                      <div className="flex items-center space-x-3">
-                        <div style={{ width: 50, height: 50 }}>
-                          <CircularProgressbar
-                            value={contact.relationship_score}
-                            text={`${Math.round(contact.relationship_score)}`}
-                            styles={buildStyles({
-                              pathColor: scoreColors.path,
-                              textColor: scoreColors.text,
-                              trailColor: scoreColors.trail,
-                              textSize: '28px',
-                            })}
-                          />
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          <div>{contact.contact_frequency || 0} contacts</div>
-                        </div>
+              {contacts.map((contact: Contact) => (
+                <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Link to={`/contacts/${contact.id}`} className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span className="text-primary-700 font-medium">
+                          {contact.first_name[0]}{contact.last_name?.[0] || ''}
+                        </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {contact.last_contact_date
-                        ? format(new Date(contact.last_contact_date), 'MMM d, yyyy')
-                        : 'Never'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <Link
-                        to={`/contacts/${contact.id}`}
-                        className="text-primary-600 hover:text-primary-900"
-                      >
-                        View
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(contact.id, `${contact.first_name} ${contact.last_name || ''}`)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900 hover:text-primary-600">
+                          {contact.first_name} {contact.last_name}
+                        </div>
+                        {contact.company && (
+                          <div className="text-sm text-gray-500">{contact.company}</div>
+                        )}
+                      </div>
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{contact.email || '-'}</div>
+                    <div className="text-sm text-gray-500">{contact.phone || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
+                      {contact.contact_type || 'Other'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRelationshipColor(contact.relationship_score)}`}>
+                        {Math.round(contact.relationship_score)}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {contact.last_contact_date
+                      ? format(new Date(contact.last_contact_date), 'MMM d, yyyy')
+                      : 'Never'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                    <Link
+                      to={`/contacts/${contact.id}`}
+                      className="text-primary-600 hover:text-primary-900"
+                    >
+                      View
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(contact.id, `${contact.first_name} ${contact.last_name || ''}`)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Summary with count */}
+      {/* Summary */}
       {contacts.length > 0 && (
         <div className="text-sm text-gray-600 text-center">
           Showing {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
-          {(searchTerm || contactType || contactStatus) && ' (filtered)'}
         </div>
       )}
 
