@@ -1,9 +1,22 @@
-"""Draft model for AI-generated email responses"""
+"""Draft model for AI-generated email responses
+
+DEPRECATED: This model is kept for backward compatibility only.
+New code should handle drafts differently, integrated with CommunicationLog.
+The Draft model will be phased out in a future release.
+"""
+import warnings
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum as SQLEnum, Float, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from ..db import Base
+
+# Issue deprecation warning
+warnings.warn(
+    "Draft model is deprecated. Implement new draft handling with CommunicationLog.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class DraftStatus(str, enum.Enum):

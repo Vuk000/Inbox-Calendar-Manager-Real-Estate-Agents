@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { contactsService, communicationsService } from '../services/api'
 import { format } from 'date-fns'
 import {
@@ -19,7 +19,7 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { VerticalTimeline, VerticalTimelineElement } from 'react-vertical-timeline-component'
 import 'react-vertical-timeline-component/style.min.css'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useInView } from 'react-intersection-observer'
 
 const communicationConfig: Record<CommunicationType, { icon: any; color: string; bgColor: string }> = {
@@ -50,11 +50,22 @@ export default function ContactDetailPage() {
     enabled: !!contactId,
   })
 
-  // Fetch timeline
-  const { data: timeline, isLoading: loadingTimeline } = useQuery({
+  // Fetch timeline with infinite scroll and cursor-based pagination
+  const {
+    data: timelinePages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loadingTimeline,
+  } = useInfiniteQuery({
     queryKey: ['contact-timeline', contactId],
-    queryFn: () => contactsService.getContactTimeline(contactId),
+    queryFn: ({ pageParam }) => contactsService.getContactTimeline(contactId, pageParam),
     enabled: !!contactId,
+    getNextPageParam: (lastPage) => {
+      // Return next cursor if there are more pages
+      return lastPage?.pagination?.has_more ? lastPage.pagination.next_cursor : undefined
+    },
+    initialPageParam: undefined,
   })
 
   // Fetch stats
@@ -72,6 +83,13 @@ export default function ContactDetailPage() {
     )
   }
 
+  // Load more when scrolled to bottom
+  useEffect(() => {
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage()
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage])
+
   if (!contact) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
@@ -80,7 +98,8 @@ export default function ContactDetailPage() {
     )
   }
 
-  const communications = timeline?.communications || []
+  // Flatten all pages into single array
+  const communications = timelinePages?.pages.flatMap(page => page.communications) || []
 
   const getRelationshipScoreColor = (score: number) => {
     if (score >= 80) return { path: '#10b981', text: '#10b981', trail: '#d1fae5' }
@@ -269,76 +288,95 @@ export default function ContactDetailPage() {
               <p className="mt-4">No communications yet</p>
             </div>
           ) : (
-            <VerticalTimeline layout="1-column-left" lineColor="#e5e7eb">
-              {communications.map((comm: CommunicationLog) => {
-                const config = communicationConfig[comm.communication_type]
-                const Icon = config.icon
-                const isExpanded = expandedItems.has(comm.id)
+            <>
+              <VerticalTimeline layout="1-column-left" lineColor="#e5e7eb">
+                {communications.map((comm: CommunicationLog) => {
+                  const config = communicationConfig[comm.communication_type]
+                  const Icon = config.icon
+                  const isExpanded = expandedItems.has(comm.id)
 
-                return (
-                  <VerticalTimelineElement
-                    key={comm.id}
-                    date={format(new Date(comm.occurred_at), 'MMM d, yyyy h:mm a')}
-                    iconStyle={{ background: config.color, color: '#fff' }}
-                    icon={<Icon />}
-                    contentStyle={{
-                      background: config.bgColor,
-                      border: `2px solid ${config.color}`,
-                      borderRadius: '8px',
-                      boxShadow: '0 3px 0 ' + config.color,
-                      cursor: 'pointer',
-                    }}
-                    contentArrowStyle={{ borderRight: `7px solid ${config.color}` }}
-                    onClick={() => toggleExpanded(comm.id)}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium uppercase" style={{ color: config.color }}>
-                          {comm.communication_type.replace('_', ' ')} • {comm.direction}
-                        </span>
-                        {comm.sentiment_score !== null && (
-                          <span className={`text-lg ${getSentimentColor(comm.sentiment_score)}`}>
-                            {getSentimentEmoji(comm.sentiment_score)}
+                  return (
+                    <VerticalTimelineElement
+                      key={comm.id}
+                      date={format(new Date(comm.occurred_at), 'MMM d, yyyy h:mm a')}
+                      iconStyle={{ background: config.color, color: '#fff' }}
+                      icon={<Icon />}
+                      contentStyle={{
+                        background: config.bgColor,
+                        border: `2px solid ${config.color}`,
+                        borderRadius: '8px',
+                        boxShadow: '0 3px 0 ' + config.color,
+                        cursor: 'pointer',
+                      }}
+                      contentArrowStyle={{ borderRight: `7px solid ${config.color}` }}
+                      onClick={() => toggleExpanded(comm.id)}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium uppercase" style={{ color: config.color }}>
+                            {comm.communication_type.replace('_', ' ')} • {comm.direction}
                           </span>
-                        )}
-                      </div>
-                      
-                      {comm.subject && (
-                        <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                          {comm.subject}
-                        </h4>
-                      )}
-                      
-                      {comm.summary && (
-                        <p className={`text-sm text-gray-700 ${!isExpanded ? 'line-clamp-2' : ''}`}>
-                          {comm.summary}
-                        </p>
-                      )}
-                      
-                      {isExpanded && comm.summary && (
-                        <div className="mt-2 pt-2 border-t border-gray-300">
-                          <div className="text-xs text-gray-600 space-y-1">
-                            {comm.from_address && <div>From: {comm.from_address}</div>}
-                            {comm.to_address && <div>To: {comm.to_address}</div>}
-                            {comm.urgency_score !== null && (
-                              <div>Urgency: {Math.round(comm.urgency_score)}/100</div>
-                            )}
-                          </div>
+                          {comm.sentiment_score !== null && (
+                            <span className={`text-lg ${getSentimentColor(comm.sentiment_score)}`}>
+                              {getSentimentEmoji(comm.sentiment_score)}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      
-                      <div className="text-xs text-gray-500 mt-2">
-                        {isExpanded ? 'Click to collapse' : 'Click to expand'}
+                        
+                        {comm.subject && (
+                          <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                            {comm.subject}
+                          </h4>
+                        )}
+                        
+                        {comm.summary && (
+                          <p className={`text-sm text-gray-700 ${!isExpanded ? 'line-clamp-2' : ''}`}>
+                            {comm.summary}
+                          </p>
+                        )}
+                        
+                        {isExpanded && comm.summary && (
+                          <div className="mt-2 pt-2 border-t border-gray-300">
+                            <div className="text-xs text-gray-600 space-y-1">
+                              {comm.from_address && <div>From: {comm.from_address}</div>}
+                              {comm.to_address && <div>To: {comm.to_address}</div>}
+                              {comm.urgency_score !== null && (
+                                <div>Urgency: {Math.round(comm.urgency_score)}/100</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-gray-500 mt-2">
+                          {isExpanded ? 'Click to collapse' : 'Click to expand'}
+                        </div>
                       </div>
-                    </div>
-                  </VerticalTimelineElement>
-                )
-              })}
-            </VerticalTimeline>
-          )}
+                    </VerticalTimelineElement>
+                  )
+                })}
+              </VerticalTimeline>
 
-          {/* Load more trigger (for future infinite scroll) */}
-          <div ref={loadMoreRef} className="h-4"></div>
+              {/* Infinite scroll trigger */}
+              {hasNextPage && (
+                <div ref={loadMoreRef} className="py-8 text-center">
+                  {isFetchingNextPage ? (
+                    <div className="inline-flex items-center space-x-2 text-primary-600">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
+                      <span className="text-sm">Loading more...</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">Scroll to load more</div>
+                  )}
+                </div>
+              )}
+
+              {!hasNextPage && communications.length > 0 && (
+                <div className="py-4 text-center text-sm text-gray-500">
+                  End of timeline
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 

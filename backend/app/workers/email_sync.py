@@ -322,43 +322,52 @@ def process_email_with_ai(self, message_id: int, db: Session = None):
         
         db.commit()
         
-        # Auto-create contact and communication log
+        # Auto-create contact and communication log with idempotency
         from ..services.contact_service import ContactService
         from ..services.communication_service import CommunicationService
-        from ..models.communication_log import CommunicationType, CommunicationDirection
+        from ..models.communication_log import CommunicationType, CommunicationDirection, CommunicationLog
         
         try:
             # Get the user_id from the email account
             user_id = message.email_account.user_id
             
-            # Get or create contact by sender email
-            contact = ContactService.get_or_create_contact_by_email(
-                db=db,
-                email=message.sender_email,
-                user_id=user_id,
-                sender_name=message.sender_name
-            )
+            # IDEMPOTENCY CHECK: Verify communication log doesn't already exist
+            existing_comm_log = db.query(CommunicationLog).filter(
+                CommunicationLog.external_id == message.external_id,
+                CommunicationLog.user_id == user_id
+            ).first()
             
-            # Create communication log
-            comm_log = asyncio.run(CommunicationService.log_communication(
-                db=db,
-                user_id=user_id,
-                contact_id=contact.id,
-                communication_type=CommunicationType.EMAIL,
-                direction=CommunicationDirection.INBOUND,
-                occurred_at=message.received_at,
-                subject=message.subject,
-                body=message.body_preview,
-                from_address=message.sender_email,
-                to_address=None,  # Could extract from message headers
-                message_id=message.id,
-                external_id=message.external_id,
-                sentiment_score=message.sentiment_score,
-                urgency_score=message.urgency_score,
-                has_attachments=message.has_attachments
-            ))
-            
-            logger.info(f"Auto-linked message {message_id} to contact {contact.id}, comm_log {comm_log.id}")
+            if existing_comm_log:
+                logger.info(f"Communication log already exists for external_id {message.external_id}, skipping")
+            else:
+                # Get or create contact by sender email (atomic operation)
+                contact = ContactService.get_or_create_contact_by_email(
+                    db=db,
+                    email=message.sender_email,
+                    user_id=user_id,
+                    sender_name=message.sender_name
+                )
+                
+                # Create communication log with transaction isolation
+                comm_log = asyncio.run(CommunicationService.log_communication(
+                    db=db,
+                    user_id=user_id,
+                    contact_id=contact.id,
+                    communication_type=CommunicationType.EMAIL,
+                    direction=CommunicationDirection.INBOUND,
+                    occurred_at=message.received_at,
+                    subject=message.subject,
+                    body=message.body_preview,
+                    from_address=message.sender_email,
+                    to_address=None,  # Could extract from message headers
+                    message_id=message.id,
+                    external_id=message.external_id,
+                    sentiment_score=message.sentiment_score,
+                    urgency_score=message.urgency_score,
+                    has_attachments=message.has_attachments
+                ))
+                
+                logger.info(f"Auto-linked message {message_id} to contact {contact.id}, comm_log {comm_log.id}")
             
         except Exception as e:
             logger.error(f"Error creating contact/comm_log for message {message_id}: {str(e)}")

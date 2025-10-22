@@ -220,51 +220,117 @@ async def delete_contact(
 async def import_contacts_csv(
     file: UploadFile = File(...),
     field_mapping: str = Query(..., description="JSON string of field mapping"),
+    duplicate_strategy: str = Query("skip", description="How to handle duplicates: skip, update, or create_duplicate"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Import contacts from CSV file with field mapping"""
+    """
+    Import contacts from CSV file with field mapping and enhanced error handling.
+    
+    Args:
+        file: CSV file upload
+        field_mapping: JSON string mapping CSV columns to contact fields
+        duplicate_strategy: How to handle duplicate emails (skip, update, create_duplicate)
+    
+    Returns:
+        Import results with detailed row-level error reporting
+    """
     import json
     
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="File must be CSV")
+    # Validate file type
+    if not file.filename or not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV file with .csv extension")
+    
+    # Validate file size (max 10MB)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
     
     try:
-        mapping = json.loads(field_mapping)
-        contents = await file.read()
+        # Parse field mapping
+        try:
+            mapping = json.loads(field_mapping)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid field_mapping JSON: {str(e)}")
         
+        # Validate duplicate strategy
+        if duplicate_strategy not in ["skip", "update", "create_duplicate"]:
+            raise HTTPException(status_code=400, detail="duplicate_strategy must be: skip, update, or create_duplicate")
+        
+        # Import contacts with enhanced error handling
         result = ContactService.import_from_csv(
             db=db,
             user_id=current_user.id,
             csv_file=contents,
-            field_mapping=mapping
+            field_mapping=mapping,
+            duplicate_strategy=duplicate_strategy
         )
         
-        return result
+        return {
+            **result,
+            "file_name": file.filename,
+            "file_size_bytes": len(contents)
+        }
+        
     except ValidationException as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"CSV import failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
 @router.get("/{contact_id}/timeline")
 async def get_contact_timeline(
     contact_id: int,
-    limit: int = Query(50, ge=1, le=200),
+    cursor: Optional[str] = Query(None, description="Pagination cursor (timestamp:id)"),
+    limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get communication timeline for a contact"""
-    timeline = ContactService.get_contact_timeline(
+    """
+    Get communication timeline for a contact with cursor-based pagination.
+    
+    Performance target: <500ms response time
+    
+    Args:
+        contact_id: Contact ID
+        cursor: Pagination cursor in format "timestamp:id" 
+        limit: Items per page (default 20, max 100)
+    
+    Returns:
+        Timeline with communications and pagination metadata
+    """
+    import time
+    start_time = time.time()
+    
+    # Verify contact exists and user has access
+    contact = ContactService.get_contact(db, contact_id, current_user.id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Get timeline with cursor pagination
+    result = ContactService.get_contact_timeline(
         db=db,
         contact_id=contact_id,
         user_id=current_user.id,
+        cursor=cursor,
         limit=limit
     )
     
+    elapsed_time = (time.time() - start_time) * 1000  # Convert to ms
+    
     return {
         "contact_id": contact_id,
-        "communications": timeline
+        "communications": result["communications"],
+        "pagination": {
+            "next_cursor": result["next_cursor"],
+            "has_more": result["has_more"],
+            "limit": limit
+        },
+        "meta": {
+            "response_time_ms": round(elapsed_time, 2),
+            "count": len(result["communications"])
+        }
     }
 
 

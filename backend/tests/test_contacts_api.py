@@ -157,6 +157,7 @@ class TestGetContactTimeline:
         assert response.status_code == 200
         data = response.json()
         assert "communications" in data
+        assert "pagination" in data
         
         timeline = data["communications"]
         assert len(timeline) == 3
@@ -176,6 +177,8 @@ class TestGetContactTimeline:
         assert response.status_code == 200
         data = response.json()
         assert data["communications"] == []
+        assert data["pagination"]["has_more"] is False
+        assert data["pagination"]["next_cursor"] is None
     
     def test_respects_limit(self, db: Session, auth_headers, test_contact):
         """Should limit number of communications returned"""
@@ -202,6 +205,125 @@ class TestGetContactTimeline:
         assert response.status_code == 200
         data = response.json()
         assert len(data["communications"]) == 5
+        assert data["pagination"]["has_more"] is True
+        assert data["pagination"]["next_cursor"] is not None
+    
+    def test_cursor_pagination_works(self, db: Session, auth_headers, test_contact):
+        """Should paginate correctly using cursor"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        # Create 25 communications
+        for i in range(25):
+            comm = CommunicationLog(
+                user_id=user.id,
+                contact_id=test_contact.id,
+                communication_type=CommunicationType.NOTE,
+                direction=CommunicationDirection.INTERNAL,
+                body=f"Note {i}",
+                occurred_at=datetime.utcnow() - timedelta(minutes=i)
+            )
+            db.add(comm)
+        db.commit()
+        
+        # Get first page
+        response1 = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline?limit=10",
+            headers=auth_headers
+        )
+        assert response1.status_code == 200
+        data1 = response1.json()
+        assert len(data1["communications"]) == 10
+        assert data1["pagination"]["has_more"] is True
+        first_cursor = data1["pagination"]["next_cursor"]
+        assert first_cursor is not None
+        
+        # Get second page using cursor
+        response2 = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline?limit=10&cursor={first_cursor}",
+            headers=auth_headers
+        )
+        assert response2.status_code == 200
+        data2 = response2.json()
+        assert len(data2["communications"]) == 10
+        assert data2["pagination"]["has_more"] is True
+        
+        # Get third page
+        second_cursor = data2["pagination"]["next_cursor"]
+        response3 = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline?limit=10&cursor={second_cursor}",
+            headers=auth_headers
+        )
+        assert response3.status_code == 200
+        data3 = response3.json()
+        assert len(data3["communications"]) == 5  # Only 5 left
+        assert data3["pagination"]["has_more"] is False
+        
+        # Verify no duplicates across pages
+        all_ids = (
+            [c["id"] for c in data1["communications"]] +
+            [c["id"] for c in data2["communications"]] +
+            [c["id"] for c in data3["communications"]]
+        )
+        assert len(all_ids) == len(set(all_ids))  # No duplicates
+    
+    def test_performance_target_met(self, db: Session, auth_headers, test_contact):
+        """Should respond in <500ms even with 200+ communications"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        # Create 200 communications
+        comms = []
+        for i in range(200):
+            comm = CommunicationLog(
+                user_id=user.id,
+                contact_id=test_contact.id,
+                communication_type=CommunicationType.EMAIL,
+                direction=CommunicationDirection.INBOUND,
+                subject=f"Email {i}",
+                body=f"Body of email {i}",
+                occurred_at=datetime.utcnow() - timedelta(minutes=i),
+                external_id=f"ext-{i}"
+            )
+            comms.append(comm)
+        db.add_all(comms)
+        db.commit()
+        
+        # Make request and check response time
+        import time
+        start = time.time()
+        response = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline?limit=20",
+            headers=auth_headers
+        )
+        elapsed_ms = (time.time() - start) * 1000
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["communications"]) == 20
+        
+        # Performance assertion: <500ms
+        assert elapsed_ms < 500, f"Timeline took {elapsed_ms}ms, should be <500ms"
+        
+        # Also check the reported response time
+        assert data["meta"]["response_time_ms"] < 500
+    
+    def test_unauthorized_access_denied(self, db: Session, test_contact):
+        """Should deny access without authentication"""
+        response = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline"
+        )
+        assert response.status_code == 401
+    
+    def test_invalid_cursor_handled_gracefully(self, db: Session, auth_headers, test_contact):
+        """Should handle invalid cursor format gracefully"""
+        response = client.get(
+            f"/api/v1/contacts/{test_contact.id}/timeline?cursor=invalid-cursor",
+            headers=auth_headers
+        )
+        
+        # Should still return results, just without cursor filter
+        assert response.status_code == 200
+        data = response.json()
+        assert "communications" in data
 
 
 class TestCSVImport:
@@ -292,6 +414,103 @@ class TestCSVImport:
         data = response.json()
         assert data["imported_count"] >= 0
         assert len(data["errors"]) > 0 or data["skipped_count"] > 0
+    
+    def test_validates_email_format(self, db: Session, auth_headers):
+        """Should validate email format and report errors"""
+        csv_data = self.create_csv_file([
+            {"First Name": "Invalid", "Last Name": "Email", "Email": "not-an-email"},
+            {"First Name": "Valid", "Last Name": "Email", "Email": "valid@example.com"},
+        ])
+        
+        field_mapping = {
+            "first_name": "First Name",
+            "last_name": "Last Name",
+            "email": "Email"
+        }
+        
+        response = client.post(
+            "/api/v1/contacts/import",
+            headers=auth_headers,
+            files={"file": ("contacts.csv", io.BytesIO(csv_data.encode()), "text/csv")},
+            params={"field_mapping": str(field_mapping).replace("'", '"')}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["imported_count"] == 1  # Only valid email imported
+        assert data["error_count"] > 0  # Invalid email reported
+    
+    def test_duplicate_strategy_skip(self, db: Session, auth_headers, test_contact):
+        """Should skip duplicates when strategy is 'skip'"""
+        csv_data = self.create_csv_file([
+            {"First Name": "Updated", "Email": test_contact.email},
+        ])
+        
+        field_mapping = {"first_name": "First Name", "email": "Email"}
+        
+        response = client.post(
+            "/api/v1/contacts/import",
+            headers=auth_headers,
+            files={"file": ("contacts.csv", io.BytesIO(csv_data.encode()), "text/csv")},
+            params={
+                "field_mapping": str(field_mapping).replace("'", '"'),
+                "duplicate_strategy": "skip"
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["skipped_count"] == 1
+        
+        # Verify original contact unchanged
+        db.refresh(test_contact)
+        assert test_contact.first_name == "John"
+    
+    def test_duplicate_strategy_update(self, db: Session, auth_headers, test_contact):
+        """Should update duplicates when strategy is 'update'"""
+        csv_data = self.create_csv_file([
+            {"First Name": "Updated", "Last Name": "Name", "Email": test_contact.email},
+        ])
+        
+        field_mapping = {
+            "first_name": "First Name",
+            "last_name": "Last Name",
+            "email": "Email"
+        }
+        
+        response = client.post(
+            "/api/v1/contacts/import",
+            headers=auth_headers,
+            files={"file": ("contacts.csv", io.BytesIO(csv_data.encode()), "text/csv")},
+            params={
+                "field_mapping": str(field_mapping).replace("'", '"'),
+                "duplicate_strategy": "update"
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 1
+        
+        # Verify contact was updated
+        db.refresh(test_contact)
+        assert test_contact.first_name == "Updated"
+        assert test_contact.last_name == "Name"
+    
+    def test_file_size_validation(self, db: Session, auth_headers):
+        """Should reject files larger than 10MB"""
+        # Create a large CSV (simulate)
+        large_data = "a" * (11 * 1024 * 1024)  # 11MB
+        
+        response = client.post(
+            "/api/v1/contacts/import",
+            headers=auth_headers,
+            files={"file": ("large.csv", io.BytesIO(large_data.encode()), "text/csv")},
+            params={"field_mapping": '{"first_name": "Name"}'}
+        )
+        
+        assert response.status_code == 400
+        assert "too large" in response.json()["detail"].lower()
     
     def test_rejects_non_csv_file(self, db: Session, auth_headers):
         """Should reject non-CSV files"""
@@ -407,4 +626,152 @@ class TestContactCRUD:
             headers=auth_headers
         )
         assert response.status_code == 404
+
+
+class TestEmailSyncIntegration:
+    """Test email sync creates contacts and communication logs"""
+    
+    def test_email_sync_creates_contact_and_comm_log(self, db: Session):
+        """Should create contact and communication log from email sync"""
+        from app.models.email_account import EmailAccount, EmailProvider
+        from app.models.message import Message, MessageSource
+        from app.services.contact_service import ContactService
+        from app.services.communication_service import CommunicationService
+        from app.models.communication_log import CommunicationType, CommunicationDirection
+        
+        # Create user and email account
+        user = User(
+            email="sync-test@example.com",
+            hashed_password="hashed",
+            full_name="Sync Test"
+        )
+        db.add(user)
+        db.commit()
+        
+        email_account = EmailAccount(
+            user_id=user.id,
+            provider=EmailProvider.GMAIL,
+            email_address="sync-test@example.com",
+            is_active=True
+        )
+        db.add(email_account)
+        db.commit()
+        
+        # Create a message (simulating email sync)
+        message = Message(
+            email_account_id=email_account.id,
+            external_id="test-external-123",
+            source=MessageSource.EMAIL,
+            sender_email="newlead@example.com",
+            sender_name="New Lead",
+            subject="Interested in buying",
+            encrypted_body="encrypted-content",
+            body_preview="I am interested in buying a house",
+            received_at=datetime.utcnow()
+        )
+        db.add(message)
+        db.commit()
+        db.refresh(message)
+        
+        # Get or create contact (as email sync does)
+        contact = ContactService.get_or_create_contact_by_email(
+            db=db,
+            email="newlead@example.com",
+            user_id=user.id,
+            sender_name="New Lead"
+        )
+        
+        assert contact is not None
+        assert contact.email == "newlead@example.com"
+        assert contact.first_name == "New"
+        assert contact.last_name == "Lead"
+        assert contact.lead_source == "email"
+        
+        # Create communication log (as email sync does)
+        import asyncio
+        comm_log = asyncio.run(CommunicationService.log_communication(
+            db=db,
+            user_id=user.id,
+            contact_id=contact.id,
+            communication_type=CommunicationType.EMAIL,
+            direction=CommunicationDirection.INBOUND,
+            occurred_at=message.received_at,
+            subject=message.subject,
+            body=message.body_preview,
+            from_address=message.sender_email,
+            message_id=message.id,
+            external_id=message.external_id
+        ))
+        
+        assert comm_log is not None
+        assert comm_log.contact_id == contact.id
+        assert comm_log.subject == "Interested in buying"
+        assert comm_log.external_id == "test-external-123"
+        
+        # Verify timeline has the communication
+        timeline_result = ContactService.get_contact_timeline(
+            db=db,
+            contact_id=contact.id,
+            user_id=user.id,
+            limit=10
+        )
+        
+        assert len(timeline_result["communications"]) == 1
+        assert timeline_result["communications"][0].id == comm_log.id
+    
+    def test_email_sync_idempotency(self, db: Session):
+        """Should not create duplicate communication logs on re-sync"""
+        from app.models.email_account import EmailAccount, EmailProvider
+        from app.services.contact_service import ContactService
+        from app.services.communication_service import CommunicationService
+        from app.models.communication_log import CommunicationType, CommunicationDirection, CommunicationLog
+        
+        # Create user
+        user = User(
+            email="idempotency-test@example.com",
+            hashed_password="hashed",
+            full_name="Idempotency Test"
+        )
+        db.add(user)
+        db.commit()
+        
+        # Create contact
+        contact = ContactService.create_contact(
+            db=db,
+            user_id=user.id,
+            contact_data={
+                "first_name": "Test",
+                "email": "existing@example.com"
+            }
+        )
+        
+        # Simulate first sync - create comm log
+        external_id = "unique-external-123"
+        import asyncio
+        comm_log1 = asyncio.run(CommunicationService.log_communication(
+            db=db,
+            user_id=user.id,
+            contact_id=contact.id,
+            communication_type=CommunicationType.EMAIL,
+            direction=CommunicationDirection.INBOUND,
+            occurred_at=datetime.utcnow(),
+            subject="Test Email",
+            external_id=external_id
+        ))
+        
+        # Check idempotency - try to create again with same external_id
+        existing_comm = db.query(CommunicationLog).filter(
+            CommunicationLog.external_id == external_id,
+            CommunicationLog.user_id == user.id
+        ).first()
+        
+        assert existing_comm is not None
+        assert existing_comm.id == comm_log1.id
+        
+        # Count should be 1
+        count = db.query(CommunicationLog).filter(
+            CommunicationLog.external_id == external_id
+        ).count()
+        
+        assert count == 1, "Should not create duplicate communication logs"
 

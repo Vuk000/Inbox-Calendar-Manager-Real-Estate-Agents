@@ -311,6 +311,11 @@ def upgrade() -> None:
     op.create_index(op.f('ix_tasks_transaction_id'), 'tasks', ['transaction_id'], unique=False)
     op.create_foreign_key('fk_tasks_transaction', 'tasks', 'transactions', ['transaction_id'], ['id'])
     op.create_foreign_key('fk_tasks_contact', 'tasks', 'contacts', ['contact_id'], ['id'])
+    
+    # Drop legacy tables - migration to CRM schema complete
+    # Note: Messages and Drafts tables are kept for backward compatibility
+    # The models still exist but are considered deprecated
+    # Communication data should now use CommunicationLog table
 
 
 def downgrade() -> None:

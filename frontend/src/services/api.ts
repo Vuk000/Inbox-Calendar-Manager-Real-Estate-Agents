@@ -244,8 +244,12 @@ export const contactsService = {
     await api.delete(`/contacts/${id}`)
   },
 
-  getContactTimeline: async (id: number, limit = 50) => {
-    const response = await api.get(`/contacts/${id}/timeline`, { params: { limit } })
+  getContactTimeline: async (id: number, cursor?: string, limit = 20) => {
+    const params: any = { limit }
+    if (cursor) {
+      params.cursor = cursor
+    }
+    const response = await api.get(`/contacts/${id}/timeline`, { params })
     return response.data
   },
 

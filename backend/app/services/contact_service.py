@@ -159,51 +159,117 @@ class ContactService:
         db: Session,
         user_id: int,
         csv_file: bytes,
-        field_mapping: Dict[str, str]
+        field_mapping: Dict[str, str],
+        duplicate_strategy: str = "skip"
     ) -> Dict[str, Any]:
-        """Import contacts from CSV with field mapping"""
+        """
+        Import contacts from CSV with enhanced error handling and validation
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            csv_file: CSV file bytes
+            field_mapping: Map of db_field -> csv_column
+            duplicate_strategy: How to handle duplicates (skip, update, create_duplicate)
+        
+        Returns:
+            Detailed import results with row-level error reporting
+        """
+        import re
+        
         try:
-            # Read CSV file
-            df = pd.read_csv(io.BytesIO(csv_file))
+            # Read CSV file with error handling
+            try:
+                df = pd.read_csv(io.BytesIO(csv_file))
+            except pd.errors.EmptyDataError:
+                raise ValidationException("CSV file is empty")
+            except Exception as e:
+                raise ValidationException(f"Failed to parse CSV file: {str(e)}")
             
             # Validate required fields
-            if 'first_name' not in field_mapping.values():
-                raise ValidationException("first_name mapping is required")
+            if 'first_name' not in field_mapping:
+                raise ValidationException("first_name field mapping is required")
             
-            # Reverse mapping for easier lookup
-            reverse_mapping = {v: k for k, v in field_mapping.items()}
+            # Validate CSV columns exist
+            missing_columns = [col for col in field_mapping.values() if col not in df.columns]
+            if missing_columns:
+                raise ValidationException(f"CSV missing required columns: {', '.join(missing_columns)}")
             
             imported_count = 0
+            updated_count = 0
             skipped_count = 0
             errors = []
             
+            # Email validation regex
+            email_regex = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+            
+            # Phone validation regex (simple)
+            phone_regex = re.compile(r'^\+?1?\d{9,15}$')
+            
             for index, row in df.iterrows():
+                row_num = index + 2  # +2 because index starts at 0 and row 1 is header
+                
                 try:
                     contact_data = {}
                     
                     # Map CSV columns to contact fields
                     for db_field, csv_column in field_mapping.items():
                         if csv_column in df.columns and pd.notna(row[csv_column]):
-                            contact_data[db_field] = str(row[csv_column]).strip()
+                            value = str(row[csv_column]).strip()
+                            
+                            # Validate email format
+                            if db_field == 'email' and value:
+                                if not email_regex.match(value):
+                                    errors.append(f"Row {row_num}: Invalid email format '{value}'")
+                                    continue
+                            
+                            # Validate phone format
+                            if db_field in ['phone', 'secondary_phone'] and value:
+                                # Remove common formatting characters
+                                clean_phone = re.sub(r'[\s\-\(\)\.]', '', value)
+                                if not phone_regex.match(clean_phone):
+                                    errors.append(f"Row {row_num}: Invalid phone format '{value}'")
+                                value = clean_phone  # Store cleaned version
+                            
+                            contact_data[db_field] = value
                     
-                    # Check for duplicates by email
-                    if 'email' in contact_data:
+                    # Validate minimum required data
+                    if 'first_name' not in contact_data or not contact_data['first_name']:
+                        errors.append(f"Row {row_num}: first_name is required")
+                        skipped_count += 1
+                        continue
+                    
+                    # Handle duplicates by email
+                    existing = None
+                    if 'email' in contact_data and contact_data['email']:
                         existing = db.query(Contact).filter(
                             Contact.user_id == user_id,
                             Contact.email == contact_data['email']
                         ).first()
-                        
-                        if existing:
+                    
+                    if existing:
+                        if duplicate_strategy == "skip":
                             skipped_count += 1
                             continue
-                    
-                    # Create contact
-                    contact = Contact(user_id=user_id, **contact_data)
-                    db.add(contact)
-                    imported_count += 1
+                        elif duplicate_strategy == "update":
+                            # Update existing contact
+                            for key, value in contact_data.items():
+                                if hasattr(existing, key):
+                                    setattr(existing, key, value)
+                            existing.updated_at = datetime.utcnow()
+                            updated_count += 1
+                        else:  # create_duplicate
+                            contact = Contact(user_id=user_id, **contact_data)
+                            db.add(contact)
+                            imported_count += 1
+                    else:
+                        # Create new contact
+                        contact = Contact(user_id=user_id, **contact_data)
+                        db.add(contact)
+                        imported_count += 1
                     
                 except Exception as e:
-                    errors.append(f"Row {index + 1}: {str(e)}")
+                    errors.append(f"Row {row_num}: {str(e)}")
                     skipped_count += 1
             
             db.commit()
@@ -211,12 +277,18 @@ class ContactService:
             return {
                 "success": True,
                 "imported_count": imported_count,
+                "updated_count": updated_count,
                 "skipped_count": skipped_count,
-                "errors": errors
+                "total_rows": len(df),
+                "errors": errors[:100],  # Limit to first 100 errors
+                "error_count": len(errors)
             }
             
+        except ValidationException:
+            raise
         except Exception as e:
             logger.error(f"CSV import error: {str(e)}")
+            db.rollback()
             raise ValidationException(f"Failed to import CSV: {str(e)}")
     
     @staticmethod
@@ -224,18 +296,89 @@ class ContactService:
         db: Session,
         contact_id: int,
         user_id: int,
-        limit: int = 50
-    ) -> List[CommunicationLog]:
-        """Get communication timeline for a contact"""
+        cursor: Optional[str] = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Get communication timeline for a contact with cursor-based pagination
+        
+        Performance optimized for <500ms response time with proper indexing.
+        
+        Args:
+            db: Database session
+            contact_id: Contact ID
+            user_id: User ID
+            cursor: Pagination cursor in format "timestamp:id"
+            limit: Number of items to return (default 20)
+        
+        Returns:
+            Dict with communications, next_cursor, and has_more flag
+        """
+        from sqlalchemy import and_
+        from sqlalchemy.orm import defer
+        
         contact = ContactService.get_contact(db, contact_id, user_id)
         if not contact:
-            return []
+            return {
+                "communications": [],
+                "next_cursor": None,
+                "has_more": False
+            }
         
-        return db.query(CommunicationLog).filter(
+        # Build query with optimizations
+        query = db.query(CommunicationLog).filter(
             CommunicationLog.contact_id == contact_id
+        )
+        
+        # Apply cursor if provided
+        if cursor:
+            try:
+                # Parse cursor: "timestamp:id"
+                timestamp_str, cursor_id = cursor.split(":")
+                cursor_timestamp = datetime.fromisoformat(timestamp_str)
+                cursor_id = int(cursor_id)
+                
+                # Filter for records before cursor (for DESC ordering)
+                query = query.filter(
+                    or_(
+                        CommunicationLog.occurred_at < cursor_timestamp,
+                        and_(
+                            CommunicationLog.occurred_at == cursor_timestamp,
+                            CommunicationLog.id < cursor_id
+                        )
+                    )
+                )
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Invalid cursor format: {cursor}, error: {str(e)}")
+                # Continue without cursor if invalid
+        
+        # Order by occurred_at DESC, then id DESC for stable pagination
+        # Defer large text fields for better performance
+        communications = query.options(
+            defer(CommunicationLog.body)  # Defer body, we use summary
         ).order_by(
-            CommunicationLog.occurred_at.desc()
-        ).limit(limit).all()
+            CommunicationLog.occurred_at.desc(),
+            CommunicationLog.id.desc()
+        ).limit(limit + 1).all()  # Fetch limit + 1 to check if more exist
+        
+        # Check if there are more results
+        has_more = len(communications) > limit
+        
+        # Trim to limit
+        if has_more:
+            communications = communications[:limit]
+        
+        # Generate next cursor if there are more results
+        next_cursor = None
+        if has_more and communications:
+            last_comm = communications[-1]
+            next_cursor = f"{last_comm.occurred_at.isoformat()}:{last_comm.id}"
+        
+        return {
+            "communications": communications,
+            "next_cursor": next_cursor,
+            "has_more": has_more
+        }
     
     @staticmethod
     def get_or_create_contact_by_email(

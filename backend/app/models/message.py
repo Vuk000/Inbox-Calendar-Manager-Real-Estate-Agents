@@ -1,9 +1,22 @@
-"""Message model for emails and multi-channel communications"""
+"""Message model for emails and multi-channel communications
+
+DEPRECATED: This model is kept for backward compatibility only.
+New code should use CommunicationLog model for logging all communications.
+The Message model will be phased out in a future release.
+"""
+import warnings
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Enum as SQLEnum, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from ..db import Base
+
+# Issue deprecation warning
+warnings.warn(
+    "Message model is deprecated. Use CommunicationLog instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class MessageSource(str, enum.Enum):
