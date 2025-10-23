@@ -530,7 +530,7 @@ async def trigger_manual_sync(
         )
     
     # Trigger sync based on provider
-    from ..workers.email_sync import sync_gmail_account, sync_outlook_account
+    from ..tasks.email_sync_task import sync_gmail_account, sync_outlook_account
     
     if account.provider == EmailProvider.GMAIL:
         task = sync_gmail_account.delay(current_user.id, account_id)

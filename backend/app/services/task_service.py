@@ -11,7 +11,7 @@ from anthropic import Anthropic
 
 from ..config import settings
 from ..models.task import Task, TaskPriority, TaskStatus
-from ..models.message import Message
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.user import User
 from ..integrations.google_calendar import GoogleCalendarIntegration
 from ..security.encryption import decrypt_data
@@ -38,16 +38,16 @@ class TaskService:
     
     async def create_from_email(
         self,
-        email: Message,
+        comm_log: CommunicationLog,
         user: User,
         db: Session,
         auto_sync_calendar: bool = True
     ) -> Task:
         """
-        Convert email to task with AI analysis.
+        Convert email communication to task with AI analysis.
         
         Args:
-            email: Message to convert
+            comm_log: CommunicationLog entry (email) to convert
             user: User creating the task
             db: Database session
             auto_sync_calendar: Whether to auto-sync to Google Calendar
@@ -59,15 +59,15 @@ class TaskService:
             TaskException: If task creation fails
         """
         try:
-            # Decrypt email body
-            email_body = decrypt_data(email.encrypted_body) if email.encrypted_body else email.body_preview
+            # Get email body from communication log
+            email_body = comm_log.body or comm_log.summary or ""
             
             # Use AI to extract action items
             prompt = f"""Analyze this email and extract actionable tasks.
 
 Email Details:
-From: {email.sender_name} <{email.sender_email}>
-Subject: {email.subject}
+From: {comm_log.from_address}
+Subject: {comm_log.subject}
 Body:
 {email_body[:1500]}
 
@@ -94,13 +94,21 @@ Return ONLY valid JSON:"""
             except Exception as e:
                 logger.warning(f"AI task extraction failed, using fallback: {str(e)}")
                 # Fallback: Use email subject as task title
+                # Determine priority from urgency score
+                priority = "medium"
+                if comm_log.urgency_score:
+                    if comm_log.urgency_score >= 70:
+                        priority = "high"
+                    elif comm_log.urgency_score < 40:
+                        priority = "low"
+                
                 task_data = {
-                    "task_title": f"Follow up: {email.subject}",
-                    "task_description": f"Address email from {email.sender_name}",
-                    "priority": email.priority.value if hasattr(email, 'priority') else "medium",
+                    "task_title": f"Follow up: {comm_log.subject}",
+                    "task_description": f"Address email from {comm_log.from_address}",
+                    "priority": priority,
                     "due_date": None,
                     "action_items": ["Review email", "Draft response"],
-                    "attendees": [email.sender_name] if email.sender_name else [],
+                    "attendees": [comm_log.from_address] if comm_log.from_address else [],
                     "estimated_duration": None
                 }
             
@@ -119,18 +127,19 @@ Return ONLY valid JSON:"""
             
             # Create task
             task = Task(
-                title=task_data.get("task_title", f"Follow up: {email.subject}")[:200],
+                title=task_data.get("task_title", f"Follow up: {comm_log.subject}")[:200],
                 description=task_data.get("task_description"),
                 status=TaskStatus.PENDING,
                 priority=TaskPriority(task_data.get("priority", "medium")),
                 due_date=due_date,
-                email_id=email.id,
+                communication_log_id=comm_log.id,
                 created_by=user.id,
                 metadata={
                     "action_items": task_data.get("action_items", []),
                     "attendees": task_data.get("attendees", []),
                     "estimated_duration": task_data.get("estimated_duration"),
-                    "created_from_email": True
+                    "created_from_email": True,
+                    "contact_id": comm_log.contact_id
                 }
             )
             
@@ -138,7 +147,7 @@ Return ONLY valid JSON:"""
             db.commit()
             db.refresh(task)
             
-            logger.info(f"Created task {task.id} from email {email.id}")
+            logger.info(f"Created task {task.id} from communication {comm_log.id}")
             
             # Sync to Google Calendar if enabled
             if auto_sync_calendar and user.google_calendar_enabled:
@@ -151,7 +160,7 @@ Return ONLY valid JSON:"""
             return task
             
         except Exception as e:
-            logger.exception(f"Failed to create task from email {email.id}")
+            logger.exception(f"Failed to create task from communication {comm_log.id}")
             raise TaskException(
                 f"Failed to create task: {str(e)}",
                 error_code="TASK_CREATION_FAILED"

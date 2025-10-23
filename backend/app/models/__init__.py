@@ -16,10 +16,9 @@ from .note import Note
 from .ai_action import AIAction
 from .landing_page import LandingPage
 
-# Legacy models - DEPRECATED - Keep for backward compatibility only
-# Use CommunicationLog instead of Message for new code
+# Legacy models - DEPRECATED
+# Message model has been removed - use CommunicationLog instead
 # Draft functionality should be reimplemented using CommunicationLog
-from .message import Message
 from .draft import Draft
 
 __all__ = [
@@ -40,7 +39,6 @@ __all__ = [
     "AIAction",
     "LandingPage",
     # Legacy - DEPRECATED
-    "Message",
     "Draft",
 ]
 

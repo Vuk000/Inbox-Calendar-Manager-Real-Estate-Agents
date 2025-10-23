@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 from .celery_app import celery_app
 from ..db import SessionLocal
 from ..models.social_account import SocialAccount, SocialProvider
-from ..models.message import Message, MessageSource
+from ..models.communication_log import CommunicationLog, CommunicationType, CommunicationDirection
+from ..models.contact import Contact
+from ..services.contact_service import ContactService
 from ..security.encryption import encrypt_data
 from ..integrations.twitter_integration import TwitterIntegration
 from ..integrations.facebook_messenger import FacebookMessengerIntegration
-from ..workers.email_sync import process_email_with_ai
+from ..tasks.email_sync_task import process_email_with_ai
 
 logger = logging.getLogger(__name__)
 
@@ -48,35 +50,46 @@ def sync_twitter_account(self, account_id: int, db: Session = None):
         messages = twitter.list_direct_messages(account.encrypted_access_token)
         events = messages.get("data", [])
         processed = 0
+        user_id = account.user_id
         for event in events:
             normalized = TwitterIntegration.normalize_dm_event(event)
             external_id = normalized.get("external_id")
             if not external_id:
                 continue
 
-            existing = db.query(Message).filter(
-                Message.external_id == external_id,
-                Message.social_account_id == account_id,
+            existing = db.query(CommunicationLog).filter(
+                CommunicationLog.external_id == external_id,
+                CommunicationLog.user_id == user_id,
             ).first()
             if existing:
                 continue
 
-            message = Message(
-                social_account_id=account_id,
+            # Get or create contact by Twitter ID (using from_address as identifier)
+            sender_id = normalized.get("sender_id")
+            contact = ContactService.get_or_create_contact_by_email(
+                db=db,
+                email=f"{sender_id}@twitter.com",  # Pseudo-email for Twitter DMs
+                user_id=user_id,
+                sender_name=sender_id
+            )
+
+            comm_log = CommunicationLog(
+                user_id=user_id,
+                contact_id=contact.id,
+                communication_type=CommunicationType.TWITTER_DM,
+                direction=CommunicationDirection.INBOUND,
                 external_id=external_id,
-                thread_id=normalized.get("recipient_id"),
-                source=MessageSource.TWITTER_DM,
-                sender_email=normalized.get("sender_id"),
-                subject=f"Twitter DM from {normalized.get('sender_id')}",
-                encrypted_body=encrypt_data(normalized.get("text", "")),
-                body_preview=normalized.get("text", "")[:200],
-                received_at=datetime.fromtimestamp(
+                subject=f"Twitter DM from {sender_id}",
+                body=normalized.get("text", ""),
+                summary=normalized.get("text", "")[:500],
+                from_address=sender_id,
+                occurred_at=datetime.fromtimestamp(
                     int(normalized.get("sent_at", datetime.utcnow().timestamp())) / 1000
                 ),
             )
-            db.add(message)
+            db.add(comm_log)
             db.commit()
-            process_email_with_ai.delay(message.id)
+            process_email_with_ai.delay(comm_log.id)
             processed += 1
         logger.info("Synced %s Twitter messages for account %s", processed, account_id)
         return {"status": "success", "processed": processed}
@@ -101,6 +114,8 @@ def sync_facebook_account(self, account_id: int, db: Session = None):
         messenger = FacebookMessengerIntegration(page_id=account.page_id)
         conversations = messenger.get_conversations(account.encrypted_access_token)
         processed = 0
+        user_id = account.user_id
+        
         for convo in conversations.get("data", []):
             for message in convo.get("messages", {}).get("data", []):
                 normalized = FacebookMessengerIntegration.normalize_message({"messaging": [
@@ -118,26 +133,38 @@ def sync_facebook_account(self, account_id: int, db: Session = None):
                 external_id = normalized.get("mid")
                 if not external_id:
                     continue
-                existing = db.query(Message).filter(
-                    Message.external_id == external_id,
-                    Message.social_account_id == account_id,
+                    
+                existing = db.query(CommunicationLog).filter(
+                    CommunicationLog.external_id == external_id,
+                    CommunicationLog.user_id == user_id,
                 ).first()
                 if existing:
                     continue
-                new_message = Message(
-                    social_account_id=account_id,
-                    external_id=external_id,
-                    thread_id=normalized.get("sender_id"),
-                    source=MessageSource.FACEBOOK_MESSENGER,
-                    sender_email=normalized.get("sender_id"),
-                    subject=f"Messenger message from {normalized.get('sender_id')}",
-                    encrypted_body=encrypt_data(normalized.get("text", "")),
-                    body_preview=normalized.get("text", "")[:200],
-                    received_at=datetime.utcnow(),
+                
+                # Get or create contact by Facebook ID
+                sender_id = normalized.get("sender_id")
+                contact = ContactService.get_or_create_contact_by_email(
+                    db=db,
+                    email=f"{sender_id}@messenger.com",  # Pseudo-email for FB Messenger
+                    user_id=user_id,
+                    sender_name=sender_id
                 )
-                db.add(new_message)
+                
+                comm_log = CommunicationLog(
+                    user_id=user_id,
+                    contact_id=contact.id,
+                    communication_type=CommunicationType.FACEBOOK_MESSENGER,
+                    direction=CommunicationDirection.INBOUND,
+                    external_id=external_id,
+                    subject=f"Messenger from {sender_id}",
+                    body=normalized.get("text", ""),
+                    summary=normalized.get("text", "")[:500],
+                    from_address=sender_id,
+                    occurred_at=datetime.utcnow(),
+                )
+                db.add(comm_log)
                 db.commit()
-                process_email_with_ai.delay(new_message.id)
+                process_email_with_ai.delay(comm_log.id)
                 processed += 1
         logger.info("Synced %s Facebook messages for account %s", processed, account_id)
         return {"status": "success", "processed": processed}

@@ -12,8 +12,10 @@ import asyncio
 from ..workers.celery_app import celery_app
 from ..db import SessionLocal
 from ..models.email_account import EmailAccount, EmailProvider, SyncStatus
-from ..models.message import Message, MessagePriority, MessageCategory, MessageSource
+from ..models.communication_log import CommunicationLog, CommunicationType, CommunicationDirection
 from ..models.user import User
+from ..models.contact import Contact
+from ..services.contact_service import ContactService
 from ..integrations.gmail_integration import GmailIntegration
 from ..integrations.outlook_integration import OutlookIntegration
 from ..integrations.vector_store import VectorStore
@@ -94,11 +96,17 @@ def sync_gmail_account(self, user_id: int, account_id: int, db: Session = None) 
         messages = result.get("messages", [])
         processed_count = 0
         
+        # Get user for contact creation
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return {"status": "error", "reason": "user_not_found"}
+        
         for msg in messages:
-            # Check if message already exists
-            existing = db.query(Message).filter(
-                Message.external_id == msg["id"],
-                Message.email_account_id == account_id
+            # Check if communication already exists by external_id
+            existing = db.query(CommunicationLog).filter(
+                CommunicationLog.external_id == msg["id"],
+                CommunicationLog.user_id == user_id
             ).first()
             
             if existing:
@@ -115,28 +123,46 @@ def sync_gmail_account(self, user_id: int, account_id: int, db: Session = None) 
                 logger.error(f"Failed to fetch message {msg['id']}: {msg_details['error']}")
                 continue
             
-            # Create message in database
-            new_message = Message(
-                email_account_id=account_id,
-                external_id=msg_details["id"],
-                thread_id=msg_details["thread_id"],
-                source=MessageSource.EMAIL,
-                sender_email=msg_details["from"],
-                sender_name=msg_details.get("from_name", ""),
-                subject=msg_details.get("subject", ""),
-                encrypted_body=encrypt_data(msg_details.get("body", "")),
-                body_preview=msg_details.get("snippet", "")[:200],
-                has_attachments=msg_details.get("has_attachments", False),
-                attachment_count=len(msg_details.get("attachments", [])),
-                received_at=datetime.fromisoformat(msg_details.get("date", datetime.utcnow().isoformat()))
+            # Parse sender email
+            sender_email = msg_details.get("from", "")
+            sender_name = msg_details.get("from_name", "")
+            
+            if not sender_email:
+                logger.warning(f"No sender email for message {msg['id']}, skipping")
+                continue
+            
+            # Get or create contact for sender
+            contact = ContactService.get_or_create_contact_by_email(
+                db=db,
+                email=sender_email,
+                user_id=user_id,
+                sender_name=sender_name
             )
             
-            db.add(new_message)
+            # Create communication log entry
+            new_comm_log = CommunicationLog(
+                user_id=user_id,
+                contact_id=contact.id,
+                communication_type=CommunicationType.EMAIL,
+                direction=CommunicationDirection.INBOUND,
+                subject=msg_details.get("subject", ""),
+                body=msg_details.get("body", ""),
+                summary=msg_details.get("snippet", "")[:500],
+                from_address=sender_email,
+                to_address=account.email,
+                external_id=msg_details["id"],
+                has_attachments=msg_details.get("has_attachments", False),
+                attachments=[{"filename": att.get("filename"), "size": att.get("size")} 
+                           for att in msg_details.get("attachments", [])],
+                occurred_at=datetime.fromisoformat(msg_details.get("date", datetime.utcnow().isoformat()))
+            )
+            
+            db.add(new_comm_log)
             db.commit()
-            db.refresh(new_message)
+            db.refresh(new_comm_log)
             
             # Trigger AI processing
-            process_email_with_ai.delay(new_message.id)
+            process_email_with_ai.delay(new_comm_log.id)
             
             processed_count += 1
         
@@ -248,11 +274,17 @@ def sync_outlook_account(self, user_id: int, account_id: int, db: Session = None
         messages = result.get("messages", [])
         processed_count = 0
         
+        # Get user for contact creation
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return {"status": "error", "reason": "user_not_found"}
+        
         for msg_data in messages:
-            # Check if message already exists
-            existing = db.query(Message).filter(
-                Message.external_id == msg_data["id"],
-                Message.email_account_id == account_id
+            # Check if communication already exists by external_id
+            existing = db.query(CommunicationLog).filter(
+                CommunicationLog.external_id == msg_data["id"],
+                CommunicationLog.user_id == user_id
             ).first()
             
             if existing:
@@ -261,27 +293,44 @@ def sync_outlook_account(self, user_id: int, account_id: int, db: Session = None
             # Parse message
             msg_details = outlook._parse_message(msg_data)
             
-            # Create message in database
-            new_message = Message(
-                email_account_id=account_id,
-                external_id=msg_details["id"],
-                thread_id=msg_details["thread_id"],
-                source=MessageSource.EMAIL,
-                sender_email=msg_details["from"],
-                sender_name=msg_details.get("from_name", ""),
-                subject=msg_details.get("subject", ""),
-                encrypted_body=encrypt_data(msg_details.get("body", "")),
-                body_preview=msg_details.get("body_preview", "")[:200],
-                has_attachments=msg_details.get("has_attachments", False),
-                received_at=datetime.fromisoformat(msg_details.get("date", datetime.utcnow().isoformat()).replace('Z', '+00:00'))
+            # Parse sender email
+            sender_email = msg_details.get("from", "")
+            sender_name = msg_details.get("from_name", "")
+            
+            if not sender_email:
+                logger.warning(f"No sender email for message {msg_data['id']}, skipping")
+                continue
+            
+            # Get or create contact for sender
+            contact = ContactService.get_or_create_contact_by_email(
+                db=db,
+                email=sender_email,
+                user_id=user_id,
+                sender_name=sender_name
             )
             
-            db.add(new_message)
+            # Create communication log entry
+            new_comm_log = CommunicationLog(
+                user_id=user_id,
+                contact_id=contact.id,
+                communication_type=CommunicationType.EMAIL,
+                direction=CommunicationDirection.INBOUND,
+                subject=msg_details.get("subject", ""),
+                body=msg_details.get("body", ""),
+                summary=msg_details.get("body_preview", "")[:500],
+                from_address=sender_email,
+                to_address=account.email,
+                external_id=msg_details["id"],
+                has_attachments=msg_details.get("has_attachments", False),
+                occurred_at=datetime.fromisoformat(msg_details.get("date", datetime.utcnow().isoformat()).replace('Z', '+00:00'))
+            )
+            
+            db.add(new_comm_log)
             db.commit()
-            db.refresh(new_message)
+            db.refresh(new_comm_log)
             
             # Trigger AI processing
-            process_email_with_ai.delay(new_message.id)
+            process_email_with_ai.delay(new_comm_log.id)
             
             processed_count += 1
         
@@ -334,27 +383,27 @@ def sync_outlook_account(self, user_id: int, account_id: int, db: Session = None
 
 
 @celery_app.task(base=BaseEmailSyncTask, bind=True)
-def process_email_with_ai(self, message_id: int, db: Session = None) -> dict:
+def process_email_with_ai(self, comm_log_id: int, db: Session = None) -> dict:
     """
     Process an email with AI triage agent.
     
     Args:
-        message_id: Message ID
+        comm_log_id: CommunicationLog ID
         db: Database session
         
     Returns:
         Dictionary with processing status and AI results
     """
     try:
-        # Get message
-        message = db.query(Message).filter(Message.id == message_id).first()
+        # Get communication log entry
+        comm_log = db.query(CommunicationLog).filter(CommunicationLog.id == comm_log_id).first()
         
-        if not message:
-            logger.warning(f"Message {message_id} not found")
-            return {"status": "error", "reason": "message_not_found"}
+        if not comm_log:
+            logger.warning(f"CommunicationLog {comm_log_id} not found")
+            return {"status": "error", "reason": "comm_log_not_found"}
         
-        # Skip if already processed
-        if message.processed_at:
+        # Skip if already processed (has sentiment and urgency scores)
+        if comm_log.sentiment_score is not None and comm_log.urgency_score is not None:
             return {"status": "skipped", "reason": "already_processed"}
         
         # Initialize triage agent
@@ -362,42 +411,41 @@ def process_email_with_ai(self, message_id: int, db: Session = None) -> dict:
         
         # Prepare email data for AI
         email_data = {
-            "subject": message.subject,
-            "body": decrypt_data(message.encrypted_body),
-            "sender_email": message.sender_email,
-            "sender_name": message.sender_name,
-            "received_at": message.received_at.isoformat()
+            "subject": comm_log.subject or "",
+            "body": comm_log.body or comm_log.summary or "",
+            "sender_email": comm_log.from_address or "",
+            "sender_name": "",  # Not stored separately in CommunicationLog
+            "received_at": comm_log.occurred_at.isoformat()
         }
         
         # Run AI analysis
         analysis = asyncio.run(agent.analyze_email(email_data))
         
-        # Update message with AI results
-        message.priority = MessagePriority(analysis.get("priority", "low"))
-        message.category = MessageCategory(analysis.get("category", "general"))
-        message.urgency_score = analysis.get("urgency_score", 20.0)
-        message.sentiment_score = analysis.get("sentiment_score", 0.0)
-        message.entities = analysis.get("entities", {})
-        message.suggested_actions = analysis.get("suggested_actions", [])
-        message.processed_at = datetime.utcnow()
+        # Update communication log with AI results
+        comm_log.urgency_score = analysis.get("urgency_score", 20.0)
+        comm_log.sentiment_score = analysis.get("sentiment_score", 0.0)
+        comm_log.key_topics = analysis.get("entities", {})
+        
+        # Generate AI summary if not already present
+        if not comm_log.summary and comm_log.body:
+            comm_log.summary = comm_log.body[:500]  # Simple truncation for now
         
         db.commit()
         
         # TODO: Store in vector database for semantic search
         # Generate embedding and store in Pinecone
         
-        logger.info(f"Processed message {message_id}: {message.priority} priority, {message.category} category")
+        logger.info(f"Processed communication {comm_log_id}: urgency={comm_log.urgency_score}, sentiment={comm_log.sentiment_score}")
         
         return {
             "status": "success",
-            "message_id": message_id,
-            "priority": message.priority.value,
-            "category": message.category.value,
-            "urgency_score": message.urgency_score
+            "comm_log_id": comm_log_id,
+            "urgency_score": comm_log.urgency_score,
+            "sentiment_score": comm_log.sentiment_score
         }
         
     except Exception as e:
-        logger.exception(f"Error processing message {message_id} with AI")
+        logger.exception(f"Error processing communication {comm_log_id} with AI")
         return {"status": "error", "error": str(e)}
 
 

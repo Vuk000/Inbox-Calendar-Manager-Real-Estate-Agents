@@ -9,7 +9,7 @@ import hashlib
 import logging
 
 from ..db import SessionLocal
-from ..workers.email_sync import process_email_with_ai, sync_gmail_account, sync_outlook_account
+from ..tasks.email_sync_task import process_email_with_ai, sync_gmail_account, sync_outlook_account
 from ..models.email_account import EmailAccount, EmailProvider
 
 router = APIRouter()

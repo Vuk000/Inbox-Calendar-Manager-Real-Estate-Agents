@@ -7,7 +7,6 @@ import logging
 
 from ..models.communication_log import CommunicationLog, CommunicationType, CommunicationDirection
 from ..models.contact import Contact
-from ..models.message import Message
 from ..models.user import User
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,6 @@ class CommunicationService:
         body: Optional[str] = None,
         from_address: Optional[str] = None,
         to_address: Optional[str] = None,
-        message_id: Optional[int] = None,
         external_id: Optional[str] = None,
         property_id: Optional[int] = None,
         transaction_id: Optional[int] = None,
@@ -62,7 +60,6 @@ class CommunicationService:
                 body=body,
                 from_address=from_address,
                 to_address=to_address,
-                message_id=message_id,
                 external_id=external_id,
                 property_id=property_id,
                 transaction_id=transaction_id,
@@ -88,81 +85,6 @@ class CommunicationService:
             logger.error(f"Error logging communication: {str(e)}")
             db.rollback()
             raise
-    
-    @staticmethod
-    async def link_message_to_contact(
-        db: Session,
-        message_id: int,
-        contact_id: int,
-        user_id: int
-    ) -> Optional[CommunicationLog]:
-        """
-        Link an existing message to a contact by creating a communication log
-        
-        Args:
-            db: Database session
-            message_id: Message ID
-            contact_id: Contact ID
-            user_id: User ID
-            
-        Returns:
-            Created CommunicationLog or None
-        """
-        try:
-            # Get message
-            message = db.query(Message).filter(Message.id == message_id).first()
-            if not message:
-                logger.warning(f"Message {message_id} not found")
-                return None
-            
-            # Get contact
-            contact = db.query(Contact).filter(
-                Contact.id == contact_id,
-                or_(Contact.user_id == user_id, Contact.is_shared_with_team == True)
-            ).first()
-            if not contact:
-                logger.warning(f"Contact {contact_id} not found or no access")
-                return None
-            
-            # Check if already linked
-            existing = db.query(CommunicationLog).filter(
-                CommunicationLog.message_id == message_id,
-                CommunicationLog.contact_id == contact_id
-            ).first()
-            
-            if existing:
-                return existing
-            
-            # Create communication log
-            direction = CommunicationDirection.INBOUND  # Default, should be determined from message
-            if message.sender_email == contact.email:
-                direction = CommunicationDirection.INBOUND
-            elif contact.email in (message.recipient_emails or []):
-                direction = CommunicationDirection.OUTBOUND
-            
-            comm_log = await CommunicationService.log_communication(
-                db=db,
-                user_id=user_id,
-                contact_id=contact_id,
-                communication_type=CommunicationType.EMAIL,
-                direction=direction,
-                occurred_at=message.received_at,
-                subject=message.subject,
-                body=message.body_preview,  # Store preview, actual body is encrypted
-                from_address=message.sender_email,
-                to_address=message.recipient_emails[0] if message.recipient_emails else None,
-                message_id=message_id,
-                external_id=message.external_id,
-                sentiment_score=message.sentiment_score,
-                urgency_score=message.urgency_score
-            )
-            
-            return comm_log
-            
-        except Exception as e:
-            logger.error(f"Error linking message to contact: {str(e)}")
-            db.rollback()
-            return None
     
     @staticmethod
     def get_contact_communications(
@@ -277,50 +199,6 @@ class CommunicationService:
             "last_contact": last_contact,
             "frequency_per_month": round(frequency_per_month, 2)
         }
-    
-    @staticmethod
-    async def auto_link_email_to_contact(
-        db: Session,
-        message_id: int,
-        user_id: int
-    ) -> Optional[Contact]:
-        """
-        Automatically find and link an email to a contact based on sender email
-        
-        Args:
-            db: Database session
-            message_id: Message ID
-            user_id: User ID
-            
-        Returns:
-            Linked Contact or None
-        """
-        try:
-            message = db.query(Message).filter(Message.id == message_id).first()
-            if not message or not message.sender_email:
-                return None
-            
-            # Find contact by email
-            contact = db.query(Contact).filter(
-                Contact.user_id == user_id,
-                Contact.email == message.sender_email
-            ).first()
-            
-            if contact:
-                # Link message to contact
-                await CommunicationService.link_message_to_contact(
-                    db=db,
-                    message_id=message_id,
-                    contact_id=contact.id,
-                    user_id=user_id
-                )
-                return contact
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error auto-linking email to contact: {str(e)}")
-            return None
     
     @staticmethod
     async def log_sms(

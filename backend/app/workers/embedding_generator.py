@@ -5,7 +5,7 @@ from typing import List
 from sentence_transformers import SentenceTransformer
 from .celery_app import celery_app, BaseEmailSyncTask
 from ..db import SessionLocal
-from ..models.message import Message
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..integrations.vector_store import VectorStore
 from ..security.encryption import decrypt_data
 import logging
@@ -25,29 +25,27 @@ def get_embedding_model():
 
 
 @celery_app.task(base=BaseEmailSyncTask, bind=True)
-def generate_email_embedding(self, message_id: int, db: Session = None):
+def generate_email_embedding(self, comm_log_id: int, db: Session = None):
     """
-    Generate and store embedding for an email.
+    Generate and store embedding for an email communication.
     
     Args:
-        message_id: Message ID to process
+        comm_log_id: CommunicationLog ID to process
         db: Database session
     """
     try:
-        # Get message
-        message = db.query(Message).filter(Message.id == message_id).first()
+        # Get communication log
+        comm_log = db.query(CommunicationLog).filter(
+            CommunicationLog.id == comm_log_id,
+            CommunicationLog.communication_type == CommunicationType.EMAIL
+        ).first()
         
-        if not message:
-            logger.warning(f"Message {message_id} not found for embedding")
-            return {"status": "error", "reason": "message_not_found"}
+        if not comm_log:
+            logger.warning(f"CommunicationLog {comm_log_id} not found for embedding")
+            return {"status": "error", "reason": "comm_log_not_found"}
         
-        # Skip if already has embedding
-        if message.vector_id:
-            return {"status": "skipped", "reason": "already_embedded"}
-        
-        # Prepare text for embedding
-        decrypted_body = decrypt_data(message.encrypted_body)
-        email_text = f"{message.subject} {decrypted_body}"[:1000]  # Limit to 1000 chars
+        # Prepare text for embedding (subject + body or summary)
+        email_text = f"{comm_log.subject or ''} {comm_log.body or comm_log.summary or ''}"[:1000]  # Limit to 1000 chars
         
         # Generate embedding
         model = get_embedding_model()
@@ -56,40 +54,31 @@ def generate_email_embedding(self, message_id: int, db: Session = None):
         # Store in Pinecone
         vector_store = VectorStore()
         
-        # Get email account for user_id
-        if message.email_account_id:
-            from ..models.email_account import EmailAccount
-            account = db.query(EmailAccount).filter(EmailAccount.id == message.email_account_id).first()
-            user_id = account.user_id if account else 0
-        else:
-            user_id = 0
+        user_id = comm_log.user_id
         
         metadata = {
-            "subject": message.subject or "",
-            "sender": message.sender_email or "",
-            "category": message.category.value if message.category else "general",
-            "priority": message.priority.value if message.priority else "low",
-            "date": message.received_at.isoformat() if message.received_at else ""
+            "subject": comm_log.subject or "",
+            "sender": comm_log.from_address or "",
+            "urgency": str(comm_log.urgency_score) if comm_log.urgency_score else "0",
+            "sentiment": str(comm_log.sentiment_score) if comm_log.sentiment_score else "0",
+            "date": comm_log.occurred_at.isoformat() if comm_log.occurred_at else "",
+            "contact_id": str(comm_log.contact_id)
         }
         
         import asyncio
         result = asyncio.run(vector_store.upsert_email(
-            message_id=str(message.id),
+            message_id=str(comm_log.id),
             user_id=user_id,
             embedding=embedding,
             metadata=metadata
         ))
         
         if result.get("success"):
-            # Update message with vector ID
-            message.vector_id = result.get("vector_id")
-            db.commit()
-            
-            logger.info(f"Generated embedding for message {message_id}")
+            logger.info(f"Generated embedding for communication {comm_log_id}")
             
             return {
                 "status": "success",
-                "message_id": message_id,
+                "comm_log_id": comm_log_id,
                 "vector_id": result.get("vector_id")
             }
         else:
@@ -97,6 +86,6 @@ def generate_email_embedding(self, message_id: int, db: Session = None):
             return {"status": "error", "error": result.get("error")}
         
     except Exception as e:
-        logger.exception(f"Error generating embedding for message {message_id}")
+        logger.exception(f"Error generating embedding for communication {comm_log_id}")
         return {"status": "error", "error": str(e)}
 

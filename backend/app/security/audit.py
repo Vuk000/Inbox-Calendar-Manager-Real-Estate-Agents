@@ -74,15 +74,15 @@ def setup_audit_listeners():
     Setup SQLAlchemy event listeners for automatic audit logging.
     Call this during application startup to enable audit tracking.
     """
-    from ..models.message import Message
+    from ..models.communication_log import CommunicationLog
     from ..models.draft import Draft
     from ..models.task import Task
     from ..models.user import User as UserModel
     
-    # Track Message updates
-    @event.listens_for(Message, 'after_update')
-    def log_message_update(mapper, connection, target):
-        """Log message updates (e.g., marking as read, starring)"""
+    # Track CommunicationLog updates (for important communications)
+    @event.listens_for(CommunicationLog, 'after_update')
+    def log_communication_update(mapper, connection, target):
+        """Log communication updates"""
         # Note: This runs in the same transaction
         try:
             changes = {}
@@ -100,18 +100,18 @@ def setup_audit_listeners():
                 # Insert audit log directly via connection
                 connection.execute(
                     AuditLog.__table__.insert().values(
-                        user_id=getattr(target, 'user_id', None),
-                        action='update_message',
-                        resource_type='message',
+                        user_id=target.user_id,
+                        action='update_communication',
+                        resource_type='communication_log',
                         resource_id=target.id,
-                        description=f'Updated message: {target.subject[:50]}',
+                        description=f'Updated communication: {(target.subject or "")[:50]}',
                         metadata={'changes': str(changes)},
                         timestamp=datetime.utcnow(),
                         status='success'
                     )
                 )
         except Exception as e:
-            logger.error(f"Failed to log message update: {str(e)}")
+            logger.error(f"Failed to log communication update: {str(e)}")
     
     # Track Draft operations
     @event.listens_for(Draft, 'after_insert')

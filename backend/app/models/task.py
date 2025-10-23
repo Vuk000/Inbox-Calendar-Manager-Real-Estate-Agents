@@ -32,7 +32,7 @@ class Task(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
+    communication_log_id = Column(Integer, ForeignKey("communication_logs.id"), nullable=True, index=True)
     property_id = Column(Integer, ForeignKey("properties.id"), nullable=True, index=True)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True, index=True)
     contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True, index=True)
@@ -70,7 +70,7 @@ class Task(Base):
     
     # Relationships
     user = relationship("User", back_populates="tasks")
-    message = relationship("Message", back_populates="tasks")
+    communication_log = relationship("CommunicationLog", foreign_keys=[communication_log_id])
     property = relationship("Property", back_populates="tasks")
     transaction = relationship("Transaction", back_populates="tasks")
     contact = relationship("Contact", foreign_keys=[contact_id])

@@ -10,7 +10,7 @@ from ..db import get_db
 from ..dependencies import get_current_user
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType
-from ..models.message import Message
+# Message model removed - using CommunicationLog
 from ..services.communication_service import CommunicationService
 from ..config import settings
 
