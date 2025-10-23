@@ -34,7 +34,7 @@ class Draft(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False, index=True)
+    communication_log_id = Column(Integer, ForeignKey("communication_logs.id"), nullable=True, index=True)
     
     # Draft content
     subject = Column(String(500))
@@ -64,7 +64,7 @@ class Draft(Base):
     
     # Relationships
     user = relationship("User", back_populates="drafts")
-    original_message = relationship("Message", back_populates="drafts")
+    communication_log = relationship("CommunicationLog", foreign_keys=[communication_log_id])
     
     def __repr__(self):
         return f"<Draft(id={self.id}, status={self.approval_status}, confidence={self.confidence_score})>"
