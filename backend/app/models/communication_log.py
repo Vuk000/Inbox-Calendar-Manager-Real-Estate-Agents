@@ -53,10 +53,7 @@ class CommunicationLog(Base):
     urgency_score = Column(Float, nullable=True)  # 0-100
     key_topics = Column(JSON, default=[])  # AI-extracted topics
     
-    # External references (DEPRECATED - transitional only)
-    # message_id kept for backwards compatibility during migration
-    # CRM features should NOT depend on this field
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
+    # External references
     external_id = Column(String(255), nullable=True)  # Gmail/Twilio/etc ID
     
     # Related entities
@@ -78,7 +75,6 @@ class CommunicationLog(Base):
     # Relationships
     user = relationship("User", back_populates="communications")
     contact = relationship("Contact", back_populates="communications")
-    message = relationship("Message", foreign_keys=[message_id])
     property = relationship("Property", foreign_keys=[property_id])
     transaction = relationship("Transaction", back_populates="communications")
     

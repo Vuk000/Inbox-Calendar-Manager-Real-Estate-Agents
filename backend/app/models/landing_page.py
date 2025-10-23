@@ -1,5 +1,5 @@
 """Landing page model for lead generation"""
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, Float, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..db import Base

@@ -11,7 +11,7 @@ from datetime import date
 from ..db import get_db
 from ..models.user import User
 from ..models.task import Task, TaskType, TaskStatus
-from ..models.message import Message
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.property import Property
 from datetime import date as date_type
 from ..dependencies import get_current_user

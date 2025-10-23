@@ -2,8 +2,8 @@
 Dependency injection providers for FastAPI
 Provides reusable dependencies for routes
 """
-from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from typing import Generator, Optional, Dict
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from anthropic import Anthropic
@@ -302,3 +302,19 @@ def get_pagination_params(
         PaginationParams: Pagination parameters
     """
     return PaginationParams(page=page, page_size=page_size)
+
+
+def get_client_info(request: Request) -> Dict[str, str]:
+    """
+    Extract client information from request for audit logging.
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        Dict with client IP and user agent
+    """
+    return {
+        "ip_address": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "unknown")
+    }

@@ -5,14 +5,14 @@ Handles data export, deletion, and consent management
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 import logging
 
 from ..db import get_db
 from ..models.user import User
-from ..models.message import Message
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.draft import Draft
 from ..models.task import Task
 from ..models.audit_log import AuditLog

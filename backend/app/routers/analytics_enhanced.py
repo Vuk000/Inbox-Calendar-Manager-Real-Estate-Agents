@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from ..db import get_db
 from ..models.user import User
-from ..models.message import Message, MessagePriority, MessageCategory
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.task import Task, TaskStatus
 from ..models.draft import Draft
 from ..dependencies import get_current_active_user

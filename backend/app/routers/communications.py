@@ -117,29 +117,8 @@ async def get_communication_stats(
     return stats
 
 
-@router.post("/link-message")
-async def link_message_to_contact(
-    message_id: int = Query(...),
-    request: LinkMessageRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Manually link a message to a contact"""
-    comm_log = await CommunicationService.link_message_to_contact(
-        db=db,
-        message_id=message_id,
-        contact_id=request.contact_id,
-        user_id=current_user.id
-    )
-    
-    if not comm_log:
-        raise HTTPException(status_code=404, detail="Message or contact not found")
-    
-    return {
-        "success": True,
-        "communication_log_id": comm_log.id,
-        "message": "Message linked to contact successfully"
-    }
+# Endpoint removed - Message model deprecated
+# Communications are now automatically linked to contacts during email sync
 
 
 @router.post("/summarize", response_model=SummarizeThreadResponse)
@@ -202,7 +181,7 @@ Provide your analysis in this JSON format:
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
 
 
-def _build_thread_text(messages: List[Message]) -> str:
+def _build_thread_text(messages: List[CommunicationLog]) -> str:
     """Build readable thread text from messages"""
     thread_parts = []
     
@@ -220,7 +199,7 @@ Subject: {msg.subject}
     return "\n".join(thread_parts)
 
 
-def _parse_summary_response(content: str, messages: List[Message]) -> dict:
+def _parse_summary_response(content: str, messages: List[CommunicationLog]) -> dict:
     """Parse AI summary response"""
     import json
     

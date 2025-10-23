@@ -22,7 +22,7 @@ class AuditLog(Base):
     
     # Context
     description = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    extra_data = Column(JSON, nullable=True)
     
     # Request info
     ip_address = Column(String(50), nullable=True)

@@ -21,7 +21,7 @@ class Analytics(Base):
     metric_unit = Column(String(50), nullable=True)  # hours, count, percentage
     
     # Context
-    metadata = Column(JSON, nullable=True)  # Additional context
+    extra_data = Column(JSON, nullable=True)  # Additional context
     
     # Date aggregation
     date = Column(DateTime(timezone=True), nullable=False, index=True)

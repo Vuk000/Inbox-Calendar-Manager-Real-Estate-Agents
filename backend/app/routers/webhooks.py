@@ -145,38 +145,52 @@ async def twilio_webhook(
             logger.warning("Twilio signature validation failed")
             raise HTTPException(status_code=403, detail="Invalid signature")
         
-        # Store message in database
+        # Store communication in database
         db = SessionLocal()
         try:
-            from app.models.message import Message, MessageSource, MessagePriority
-            from app.security.encryption import encrypt_data
+            from app.models.communication_log import CommunicationLog, CommunicationType, CommunicationDirection
+            from app.services.contact_service import ContactService
+            from app.models.user import User
             from datetime import datetime
             
-            # Determine source
-            source = MessageSource.WHATSAPP if from_number.startswith('whatsapp:') else MessageSource.SMS
+            # Determine communication type
+            comm_type = CommunicationType.WHATSAPP if from_number.startswith('whatsapp:') else CommunicationType.SMS
             
-            # Find user by phone number or create as system message
-            # For now, store without user association (would need phone number mapping)
+            # Find user by Twilio phone number (would need proper mapping)
+            # For now, skip if no user found - in production this should be mapped
+            # TODO: Add proper user-phone mapping
+            user = db.query(User).first()  # Placeholder - get first user for demo
+            if not user:
+                logger.warning("No user found for SMS webhook")
+                return {"status": "no_user"}
             
-            new_message = Message(
-                email_account_id=None,  # SMS/WhatsApp not tied to email account
-                external_id=message_sid,
-                thread_id=from_number,  # Use phone as thread
-                source=source,
-                sender_email=from_number,  # Store phone as "email"
-                sender_name="",
-                subject=f"SMS from {from_number}",
-                encrypted_body=encrypt_data(body or ""),
-                body_preview=(body or "")[:200],
-                received_at=datetime.utcnow(),
-                priority=MessagePriority.MEDIUM  # Default priority for SMS
+            # Get or create contact by phone
+            contact = ContactService.get_or_create_contact_by_phone(
+                db=db,
+                phone=from_number.replace('whatsapp:', '').replace('+', ''),
+                user_id=user.id,
+                name=None
             )
             
-            db.add(new_message)
+            # Create communication log
+            new_comm_log = CommunicationLog(
+                user_id=user.id,
+                contact_id=contact.id,
+                communication_type=comm_type,
+                direction=CommunicationDirection.INBOUND,
+                external_id=message_sid,
+                subject=f"{'WhatsApp' if comm_type == CommunicationType.WHATSAPP else 'SMS'} from {from_number}",
+                body=body or "",
+                summary=(body or "")[:500],
+                from_address=from_number,
+                occurred_at=datetime.utcnow()
+            )
+            
+            db.add(new_comm_log)
             db.commit()
             
             # Run AI triage
-            process_email_with_ai.delay(new_message.id)
+            process_email_with_ai.delay(new_comm_log.id)
             
         finally:
             db.close()

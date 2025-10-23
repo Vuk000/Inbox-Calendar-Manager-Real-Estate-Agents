@@ -71,3 +71,8 @@ def verify_token(token: str, token_type: str = "access") -> Optional[Dict[str, A
     except JWTError:
         return None
 
+
+# Alias for backwards compatibility
+def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
+    """Decode and verify access token (alias for verify_token)"""
+    return verify_token(token, token_type="access")

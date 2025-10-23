@@ -9,7 +9,7 @@ from datetime import datetime
 
 from ..db import get_db
 from ..models.user import User
-from ..models.message import Message
+from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.draft import Draft, DraftStatus
 from ..models.email_account import EmailAccount, EmailProvider
 from ..dependencies import get_current_user

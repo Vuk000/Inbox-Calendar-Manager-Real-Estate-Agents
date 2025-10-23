@@ -51,8 +51,8 @@ class Property(Base):
     photo_urls = Column(JSON, default=[])
     virtual_tour_url = Column(String(500), nullable=True)
     
-    # AI-extracted metadata
-    metadata = Column(JSON, default={})
+    # AI-extracted data
+    property_metadata = Column(JSON, default={})
     
     # Notes
     notes = Column(Text, nullable=True)
@@ -62,10 +62,10 @@ class Property(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    messages = relationship("Message", back_populates="property")
     tasks = relationship("Task", back_populates="property")
     transactions = relationship("Transaction", back_populates="property")
     notes_list = relationship("Note", back_populates="property", cascade="all, delete-orphan")
+    communication_logs = relationship("CommunicationLog", back_populates="property")
     
     def __repr__(self):
         return f"<Property(id={self.id}, address={self.address}, mls_id={self.mls_id})>"

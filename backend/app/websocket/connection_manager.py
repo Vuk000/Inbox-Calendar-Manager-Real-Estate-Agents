@@ -2,7 +2,7 @@
 WebSocket connection manager for real-time notifications
 Enhanced for Phase 4: Real-time email sync and notifications
 """
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Set, Any, Optional
 from fastapi import WebSocket
 from datetime import datetime
 import json
