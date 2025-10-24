@@ -24,7 +24,7 @@ class TestEmailSyncIntegration:
         
         account = EmailAccount(
             user_id=test_user.id,
-            email="test@gmail.com",
+            email_address="test@gmail.com",
             provider=EmailProvider.GMAIL,
             is_active=True,
             auto_sync_enabled=True,
