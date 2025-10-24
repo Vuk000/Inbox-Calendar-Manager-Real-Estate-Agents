@@ -39,7 +39,7 @@ class SocialAccount(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="social_accounts")
-    messages = relationship("Message", back_populates="social_account", cascade="all, delete-orphan")
+    # Messages are now tracked in CommunicationLog via external_id
 
     def __repr__(self):
         return f"<SocialAccount(id={self.id}, provider={self.provider}, handle={self.handle})>"

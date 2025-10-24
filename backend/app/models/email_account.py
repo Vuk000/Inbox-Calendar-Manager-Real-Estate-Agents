@@ -63,7 +63,7 @@ class EmailAccount(Base):
     
     # Relationships
     user = relationship("User", back_populates="email_accounts")
-    messages = relationship("Message", back_populates="email_account", cascade="all, delete-orphan")
+    # Messages are now tracked in CommunicationLog via external_id
     
     def __repr__(self):
         return f"<EmailAccount(id={self.id}, email={self.email_address}, provider={self.provider})>"

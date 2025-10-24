@@ -634,9 +634,7 @@ class TestEmailSyncIntegration:
     def test_email_sync_creates_contact_and_comm_log(self, db: Session):
         """Should create contact and communication log from email sync"""
         from app.models.email_account import EmailAccount, EmailProvider
-        from app.models.message import Message, MessageSource
         from app.services.contact_service import ContactService
-        from app.services.communication_service import CommunicationService
         from app.models.communication_log import CommunicationType, CommunicationDirection
         
         # Create user and email account
@@ -775,3 +773,278 @@ class TestEmailSyncIntegration:
         
         assert count == 1, "Should not create duplicate communication logs"
 
+
+class TestContactTimeline:
+    """Test GET /contacts/{contact_id}/timeline endpoint - THE KILLER FEATURE"""
+    
+    @pytest.fixture
+    def contact_with_timeline(self, db: Session, auth_headers):
+        """Create a contact with 25 communication log entries for pagination testing"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        contact = Contact(
+            user_id=user.id,
+            first_name="Jane",
+            last_name="Timeline",
+            email="jane.timeline@example.com",
+            contact_type="buyer"
+        )
+        db.add(contact)
+        db.commit()
+        db.refresh(contact)
+        
+        # Create 25 communications spread over time
+        base_time = datetime.utcnow()
+        for i in range(25):
+            comm = CommunicationLog(
+                user_id=user.id,
+                contact_id=contact.id,
+                communication_type=CommunicationType.EMAIL if i % 2 == 0 else CommunicationType.SMS,
+                direction=CommunicationDirection.INBOUND if i % 3 == 0 else CommunicationDirection.OUTBOUND,
+                subject=f"Communication {i}" if i % 2 == 0 else None,
+                body=f"This is communication number {i}",
+                summary=f"Summary of communication {i}",
+                from_address="jane.timeline@example.com" if i % 3 == 0 else "agent@example.com",
+                to_address="agent@example.com" if i % 3 == 0 else "jane.timeline@example.com",
+                occurred_at=base_time - timedelta(hours=i),
+                urgency_score=50.0 + (i % 50),
+                sentiment_score=0.5 - (i % 10) * 0.1
+            )
+            db.add(comm)
+        
+        db.commit()
+        return contact
+    
+    def test_get_timeline_first_page(self, db: Session, auth_headers, contact_with_timeline):
+        """Test fetching first page of timeline"""
+        import time
+        start_time = time.time()
+        
+        response = client.get(
+            f"/api/v1/contacts/{contact_with_timeline.id}/timeline?limit=10",
+            headers=auth_headers
+        )
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify structure
+        assert "contact_id" in data
+        assert "communications" in data
+        assert "pagination" in data
+        assert "meta" in data
+        
+        # Verify pagination metadata
+        assert data["contact_id"] == contact_with_timeline.id
+        assert len(data["communications"]) == 10
+        assert data["pagination"]["has_more"] is True
+        assert data["pagination"]["next_cursor"] is not None
+        assert data["pagination"]["limit"] == 10
+        
+        # Verify performance (<500ms target)
+        assert data["meta"]["response_time_ms"] < 500, f"Timeline took {data['meta']['response_time_ms']}ms (target: <500ms)"
+        
+        # Verify communications are ordered by occurred_at DESC (newest first)
+        occurred_times = [comm["occurred_at"] for comm in data["communications"]]
+        assert occurred_times == sorted(occurred_times, reverse=True), "Communications should be ordered by occurred_at DESC"
+    
+    def test_get_timeline_pagination_with_cursor(self, db: Session, auth_headers, contact_with_timeline):
+        """Test cursor-based pagination through timeline"""
+        # Get first page
+        response1 = client.get(
+            f"/api/v1/contacts/{contact_with_timeline.id}/timeline?limit=10",
+            headers=auth_headers
+        )
+        
+        assert response1.status_code == 200
+        page1 = response1.json()
+        
+        # Get second page using cursor
+        next_cursor = page1["pagination"]["next_cursor"]
+        response2 = client.get(
+            f"/api/v1/contacts/{contact_with_timeline.id}/timeline?limit=10&cursor={next_cursor}",
+            headers=auth_headers
+        )
+        
+        assert response2.status_code == 200
+        page2 = response2.json()
+        
+        # Verify we got different communications
+        page1_ids = {comm["id"] for comm in page1["communications"]}
+        page2_ids = {comm["id"] for comm in page2["communications"]}
+        assert page1_ids.isdisjoint(page2_ids), "Pages should contain different communications"
+        
+        # Verify page 2 has correct data
+        assert len(page2["communications"]) == 10
+        assert page2["pagination"]["has_more"] is True
+        
+        # Get third page
+        next_cursor2 = page2["pagination"]["next_cursor"]
+        response3 = client.get(
+            f"/api/v1/contacts/{contact_with_timeline.id}/timeline?limit=10&cursor={next_cursor2}",
+            headers=auth_headers
+        )
+        
+        assert response3.status_code == 200
+        page3 = response3.json()
+        
+        # Page 3 should have 5 communications (25 total - 10 - 10 = 5)
+        assert len(page3["communications"]) == 5
+        assert page3["pagination"]["has_more"] is False
+        assert page3["pagination"]["next_cursor"] is None
+    
+    def test_get_timeline_ordering(self, db: Session, auth_headers, contact_with_timeline):
+        """Test that timeline is ordered by occurred_at DESC"""
+        response = client.get(
+            f"/api/v1/contacts/{contact_with_timeline.id}/timeline?limit=25",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # All 25 communications should be returned
+        assert len(data["communications"]) == 25
+        
+        # Verify strict descending order
+        for i in range(len(data["communications"]) - 1):
+            current = datetime.fromisoformat(data["communications"][i]["occurred_at"].replace('Z', '+00:00'))
+            next_comm = datetime.fromisoformat(data["communications"][i + 1]["occurred_at"].replace('Z', '+00:00'))
+            assert current >= next_comm, f"Communication {i} should be newer than communication {i+1}"
+    
+    def test_get_timeline_empty_contact(self, db: Session, auth_headers):
+        """Test timeline for contact with no communications"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        contact = Contact(
+            user_id=user.id,
+            first_name="Empty",
+            last_name="Timeline",
+            email="empty@example.com"
+        )
+        db.add(contact)
+        db.commit()
+        db.refresh(contact)
+        
+        response = client.get(
+            f"/api/v1/contacts/{contact.id}/timeline",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert len(data["communications"]) == 0
+        assert data["pagination"]["has_more"] is False
+        assert data["pagination"]["next_cursor"] is None
+    
+    def test_get_timeline_nonexistent_contact(self, db: Session, auth_headers):
+        """Test timeline for non-existent contact"""
+        response = client.get(
+            "/api/v1/contacts/99999/timeline",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 404
+    
+    def test_get_timeline_various_communication_types(self, db: Session, auth_headers):
+        """Test timeline displays all communication types correctly"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        contact = Contact(
+            user_id=user.id,
+            first_name="Multi",
+            last_name="Channel",
+            email="multi@example.com"
+        )
+        db.add(contact)
+        db.commit()
+        
+        # Create different types of communications
+        comm_types = [
+            (CommunicationType.EMAIL, "Email subject", "Email body"),
+            (CommunicationType.SMS, None, "SMS text message"),
+            (CommunicationType.PHONE_CALL, None, "Phone call notes"),
+            (CommunicationType.MEETING, "Meeting notes", "Discussed contract terms"),
+            (CommunicationType.NOTE, "Internal note", "Client seems very motivated")
+        ]
+        
+        base_time = datetime.utcnow()
+        for i, (comm_type, subject, body) in enumerate(comm_types):
+            comm = CommunicationLog(
+                user_id=user.id,
+                contact_id=contact.id,
+                communication_type=comm_type,
+                direction=CommunicationDirection.INBOUND,
+                subject=subject,
+                body=body,
+                summary=body[:100],
+                from_address="multi@example.com",
+                occurred_at=base_time - timedelta(minutes=i)
+            )
+            db.add(comm)
+        
+        db.commit()
+        
+        # Fetch timeline
+        response = client.get(
+            f"/api/v1/contacts/{contact.id}/timeline",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert len(data["communications"]) == 5
+        
+        # Verify all types are present
+        types_in_timeline = {comm["communication_type"] for comm in data["communications"]}
+        assert types_in_timeline == {"email", "sms", "phone_call", "meeting", "note"}
+    
+    def test_timeline_performance_with_large_dataset(self, db: Session, auth_headers):
+        """Test timeline performance with 100 communications"""
+        user = app.dependency_overrides[get_current_user]()
+        
+        contact = Contact(
+            user_id=user.id,
+            first_name="Performance",
+            last_name="Test",
+            email="perf@example.com"
+        )
+        db.add(contact)
+        db.commit()
+        
+        # Create 100 communications
+        base_time = datetime.utcnow()
+        communications = []
+        for i in range(100):
+            comm = CommunicationLog(
+                user_id=user.id,
+                contact_id=contact.id,
+                communication_type=CommunicationType.EMAIL,
+                direction=CommunicationDirection.INBOUND,
+                subject=f"Email {i}",
+                body=f"Body {i}",
+                from_address="perf@example.com",
+                occurred_at=base_time - timedelta(hours=i)
+            )
+            communications.append(comm)
+        
+        db.add_all(communications)
+        db.commit()
+        
+        # Test performance
+        import time
+        start_time = time.time()
+        
+        response = client.get(
+            f"/api/v1/contacts/{contact.id}/timeline?limit=20",
+            headers=auth_headers
+        )
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        
+        assert response.status_code == 200
+        assert elapsed_ms < 500, f"Timeline with 100 communications took {elapsed_ms}ms (target: <500ms)"

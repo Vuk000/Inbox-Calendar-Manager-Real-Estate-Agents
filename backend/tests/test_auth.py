@@ -119,3 +119,20 @@ def test_refresh_token(client, test_user):
     assert "access_token" in data
     assert "refresh_token" in data
 
+
+def test_protected_endpoint_without_token(client):
+    """Test accessing protected endpoint without authentication token"""
+    response = client.get("/api/v1/auth/me")
+    
+    assert response.status_code == 401
+    assert "detail" in response.json()
+
+
+def test_protected_endpoint_with_invalid_token(client):
+    """Test accessing protected endpoint with invalid token"""
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": "Bearer invalid-token-12345"}
+    )
+    
+    assert response.status_code == 401
