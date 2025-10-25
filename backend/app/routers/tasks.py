@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from datetime import date
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.task import Task, TaskType, TaskStatus
 from ..models.communication_log import CommunicationLog, CommunicationType

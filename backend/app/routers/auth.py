@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User, UserRole, SubscriptionTier
 from ..security.encryption import hash_password, verify_password
 from ..security.jwt_handler import create_access_token, create_refresh_token, verify_token

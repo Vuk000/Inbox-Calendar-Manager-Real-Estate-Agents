@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..dependencies import get_current_user
 from ..models.user import User
 from ..models.transaction import Transaction, TransactionStage, TransactionType

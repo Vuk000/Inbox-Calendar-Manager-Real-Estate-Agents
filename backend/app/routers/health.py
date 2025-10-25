@@ -9,7 +9,7 @@ from datetime import datetime
 import redis
 import logging
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..config import settings
 from ..websocket.connection_manager import connection_manager
 

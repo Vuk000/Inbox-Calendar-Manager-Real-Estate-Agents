@@ -7,7 +7,7 @@ from sqlalchemy import func
 from typing import Optional
 from datetime import datetime, timedelta, date
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.task import Task, TaskStatus

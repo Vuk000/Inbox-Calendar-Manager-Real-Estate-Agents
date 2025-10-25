@@ -7,7 +7,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, date
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.property import Property
 from ..dependencies import get_current_user

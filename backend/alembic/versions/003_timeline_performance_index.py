@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers
-revision = '003_timeline_performance'
+revision = '003_timeline_performance_index'
 down_revision = '002_project_apex'
 branch_labels = None
 depends_on = None

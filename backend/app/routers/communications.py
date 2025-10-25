@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from anthropic import Anthropic
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..dependencies import get_current_user
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.draft import Draft

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.email_account import EmailAccount, EmailProvider
 from ..models.social_account import SocialAccount, SocialProvider

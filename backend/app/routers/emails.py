@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType, CommunicationDirection
 from ..models.email_account import EmailAccount

@@ -7,7 +7,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User
 from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.draft import Draft, DraftStatus

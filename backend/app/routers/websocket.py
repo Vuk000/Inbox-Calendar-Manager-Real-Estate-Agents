@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..websocket.connection_manager import ConnectionManager
 from ..models.user import User
 from ..security.jwt_handler import verify_token

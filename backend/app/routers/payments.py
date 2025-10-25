@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 
-from ..db import get_db
+from ..dependencies import get_db
 from ..models.user import User, SubscriptionTier
 from ..dependencies import get_current_user
 from ..config import settings
