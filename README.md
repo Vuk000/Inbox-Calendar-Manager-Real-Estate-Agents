@@ -4,7 +4,8 @@
 
 **Status**: ✅ **READY FOR LOCAL DEVELOPMENT**  
 **Last Updated**: October 25, 2025  
-**Version**: 2.0.0 (Project Apex - CRM Focus)
+**Version**: 2.0.0 (Project Apex - CRM Focus)  
+**Python**: 3.13.3 | **Node**: 18+ | **Database**: SQLite (dev) / PostgreSQL (prod)
 
 An enterprise-grade SaaS platform that uses AI (Claude Sonnet 4.5) to automate email management, lead qualification, response drafting, and workflow automation specifically for real estate professionals.
 
@@ -81,6 +82,27 @@ RealInbox AI/
 - **Data Fetching**: TanStack Query (React Query)
 - **Routing**: React Router v6
 - **Notifications**: React Hot Toast
+
+## ⚡ Quick Commands
+
+```bash
+# Start backend (from project root)
+cd backend && python -m uvicorn app.main:app --reload
+
+# Start frontend (new terminal)
+cd frontend && npm run dev
+
+# Run tests
+cd backend && pytest
+cd frontend && npm test
+
+# Database migrations
+cd backend && alembic upgrade head
+```
+
+**URLs**: Backend: http://localhost:8000 | Frontend: http://localhost:5173 | API Docs: http://localhost:8000/api/v1/docs
+
+---
 
 ## 🚀 Quick Start
 
@@ -159,16 +181,22 @@ npm run dev
 
 ## 📖 Documentation
 
-**Start Here**:
+**Essential Reading**:
 - **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current status, what works, known issues
-- **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)** - Detailed setup instructions
+- **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)** - Complete setup guide
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design decisions
 
-**Additional Guides**:
-- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Database migration management
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design
-- **[ENV_TEMPLATE.md](ENV_TEMPLATE.md)** - Environment variable reference
+**Guides** (in `docs/guides/`):
+- **[Migration Guide](docs/guides/MIGRATION_GUIDE.md)** - Database migration management
+- **[Deployment Checklist](docs/guides/DEPLOYMENT_CHECKLIST.md)** - Production deployment
+- **[Testing Checklist](docs/guides/TESTING_CHECKLIST.md)** - Test coverage guide
 
-**Archived Docs**: `docs/archive/` - Historical status reports
+**Backend**:
+- **[ENV_TEMPLATE.md](backend/ENV_TEMPLATE.md)** - Environment variable reference
+- **[Backend README](backend/README.md)** - Backend-specific documentation
+
+**Frontend**:
+- **[Frontend README](frontend/README.md)** - Frontend-specific documentation
 
 ## 🔑 Configuration
 
