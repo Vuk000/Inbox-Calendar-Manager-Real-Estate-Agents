@@ -80,9 +80,9 @@ async def register(
     db.refresh(new_user)
     
     # Generate tokens
-    token_data = {"user_id": new_user.id, "email": new_user.email, "role": new_user.role.value}
+    token_data = {"sub": str(new_user.id), "email": new_user.email, "role": new_user.role.value}
     access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token({"user_id": new_user.id})
+    refresh_token = create_refresh_token({"sub": str(new_user.id)})
     
     # Log action
     await log_action(
@@ -147,9 +147,9 @@ async def login(
     db.commit()
     
     # Generate tokens
-    token_data = {"user_id": user.id, "email": user.email, "role": user.role.value}
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
     access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token({"user_id": user.id})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
     
     # Log successful login
     await log_action(
@@ -193,8 +193,8 @@ async def refresh_token(
         )
     
     # Get user
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
+    user_id = payload.get("sub")
+    user = db.query(User).filter(User.id == int(user_id)).first()
     
     if not user or not user.is_active:
         raise HTTPException(
@@ -203,9 +203,9 @@ async def refresh_token(
         )
     
     # Generate new tokens
-    token_data = {"user_id": user.id, "email": user.email, "role": user.role.value}
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
     access_token = create_access_token(token_data)
-    new_refresh_token = create_refresh_token({"user_id": user.id})
+    new_refresh_token = create_refresh_token({"sub": str(user.id)})
     
     return TokenResponse(
         access_token=access_token,

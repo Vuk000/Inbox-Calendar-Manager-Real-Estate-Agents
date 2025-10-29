@@ -13,6 +13,7 @@ from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.task import Task, TaskStatus
 from ..models.draft import Draft, DraftStatus
 from ..models.analytics import Analytics
+from ..models.contact import Contact
 from ..dependencies import get_current_user
 
 router = APIRouter()
@@ -34,29 +35,23 @@ async def get_dashboard(
     - Urgent emails
     - Recent leads
     """
-    # Get user's email accounts
-    account_ids = [acc.id for acc in current_user.email_accounts if acc.is_active]
-    
     # Today's start
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = datetime.utcnow() - timedelta(days=7)
     
-    # Emails processed today
-    emails_today = 0
-    if account_ids:
-        emails_today = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.processed_at >= today_start
-        ).count()
+    # Communications (emails) processed today
+    emails_today = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.created_at >= today_start
+    ).count()
     
-    # Time saved this week (estimate: 0.1h per processed email)
-    time_saved_hours = 0
-    if account_ids:
-        emails_this_week = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.processed_at >= week_start
-        ).count()
-        time_saved_hours = round(emails_this_week * 0.1, 1)
+    # Time saved this week (estimate: 0.1h per communication)
+    comms_this_week = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.created_at >= week_start
+    ).count()
+    time_saved_hours = round(comms_this_week * 0.1, 1)
     
     # Drafts generated
     drafts_generated = db.query(Draft).filter(
@@ -71,45 +66,94 @@ async def get_dashboard(
         Task.completed_at >= week_start
     ).count()
     
-    # Urgent emails (high priority, unread)
-    urgent_emails = []
-    if account_ids:
-        urgent_messages = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.priority == MessagePriority.HIGH,
-            Message.is_read == False
-        ).order_by(Message.urgency_score.desc()).limit(5).all()
-        
-        urgent_emails = [
-            {
-                "id": msg.id,
-                "subject": msg.subject,
-                "sender": msg.sender_email,
-                "category": msg.category.value if msg.category else "general",
-                "urgency_score": msg.urgency_score
-            }
-            for msg in urgent_messages
-        ]
+    # Urgent communications (high urgency score)
+    urgent_comms = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.urgency_score >= 70
+    ).order_by(CommunicationLog.urgency_score.desc()).limit(5).all()
     
-    # Recent leads (emails categorized as leads)
-    recent_leads = []
-    if account_ids:
-        lead_messages = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.category == MessageCategory.LEAD,
-            Message.received_at >= week_start
-        ).order_by(Message.received_at.desc()).limit(5).all()
+    urgent_emails = [
+        {
+            "id": comm.id,
+            "subject": comm.subject or "No subject",
+            "sender": comm.from_address,
+            "category": "urgent",
+            "urgency_score": comm.urgency_score
+        }
+        for comm in urgent_comms
+    ]
+    
+    # Recent leads (contacts created from email in last week)
+    recent_lead_contacts = db.query(Contact).filter(
+        Contact.user_id == current_user.id,
+        Contact.lead_source == "email",
+        Contact.created_at >= week_start
+    ).order_by(Contact.relationship_score.desc()).limit(5).all()
+    
+    recent_leads = [
+        {
+            "id": contact.id,
+            "name": contact.full_name,
+            "email": contact.email,
+            "score": int(contact.relationship_score),
+            "received_at": contact.created_at.isoformat()
+        }
+        for contact in recent_lead_contacts
+    ]
+    
+    # Email activity chart data (last 14 days)
+    email_activity = []
+    for i in range(14):
+        day = today_start - timedelta(days=13-i)
+        day_end = day + timedelta(days=1)
         
-        recent_leads = [
-            {
-                "id": msg.id,
-                "name": msg.sender_name or msg.sender_email,
-                "email": msg.sender_email,
-                "score": int(msg.urgency_score) if msg.urgency_score else 50,
-                "received_at": msg.received_at.isoformat()
-            }
-            for msg in lead_messages
-        ]
+        day_emails = db.query(CommunicationLog).filter(
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.communication_type == CommunicationType.EMAIL,
+            CommunicationLog.created_at >= day,
+            CommunicationLog.created_at < day_end
+        ).count()
+        
+        email_activity.append({
+            "date": day.isoformat(),
+            "emails": day_emails,
+            "ai_actions": day_emails  # Simplified for now
+        })
+    
+    # AI action breakdown
+    ai_action_breakdown = [
+        {"name": "Email Triage", "value": emails_today},
+        {"name": "Drafts", "value": drafts_generated},
+        {"name": "Tasks Created", "value": tasks_completed}
+    ]
+    
+    # Lead funnel (simplified)
+    total_contacts = db.query(Contact).filter(Contact.user_id == current_user.id).count()
+    contacted = db.query(Contact).filter(Contact.user_id == current_user.id, Contact.last_contact_date.isnot(None)).count()
+    qualified = db.query(Contact).filter(Contact.user_id == current_user.id, Contact.relationship_score >= 50).count()
+    
+    lead_funnel = [
+        {"stage": "New", "count": total_contacts},
+        {"stage": "Contacted", "count": contacted},
+        {"stage": "Qualified", "count": qualified}
+    ]
+    
+    # ROI over time (based on actual activity)
+    roi_over_time = []
+    for i in range(7, -1, -1):
+        day = today_start - timedelta(days=i)
+        day_end = day + timedelta(days=1)
+        day_comms = db.query(CommunicationLog).filter(
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.created_at >= day,
+            CommunicationLog.created_at < day_end
+        ).count()
+        roi_over_time.append({
+            "date": day.isoformat(),
+            "hours_saved": round(day_comms * 0.1, 1),
+            "value_generated": day_comms * 25
+        })
     
     return {
         "emails_processed_today": emails_today,
@@ -118,6 +162,10 @@ async def get_dashboard(
         "tasks_completed": tasks_completed,
         "urgent_emails": urgent_emails,
         "recent_leads": recent_leads,
+        "email_activity": email_activity,
+        "ai_action_breakdown": ai_action_breakdown,
+        "lead_funnel": lead_funnel,
+        "roi_over_time": roi_over_time,
         "ai_actions_used": current_user.ai_actions_this_month,
         "ai_actions_limit": current_user.ai_actions_limit
     }

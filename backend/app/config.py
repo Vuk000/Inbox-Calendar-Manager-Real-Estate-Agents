@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     FOLLOW_UP_SCHEDULE_MINUTES: str = "1440,4320,10080,20160,43200"  # 1d,3d,7d,14d,30d
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://*.vercel.app"
     CORS_CREDENTIALS: bool = True
     
     # Stripe
