@@ -37,6 +37,8 @@ class EmailListResponse(BaseModel):
     has_attachments: bool
     occurred_at: datetime
     contact_id: int
+    is_starred: bool = False
+    is_archived: bool = False
     
     class Config:
         from_attributes = True
@@ -56,6 +58,8 @@ class EmailDetailResponse(BaseModel):
     attachments: List[dict]
     occurred_at: datetime
     contact_id: int
+    is_starred: bool = False
+    is_archived: bool = False
     
     class Config:
         from_attributes = True
@@ -79,6 +83,8 @@ async def list_emails(
     limit: int = Query(50, ge=1, le=100),
     urgency_min: Optional[float] = None,
     search: Optional[str] = None,
+    starred: Optional[bool] = None,
+    archived: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -89,11 +95,14 @@ async def list_emails(
     - **limit**: Items per page (max 100)
     - **urgency_min**: Filter by minimum urgency score (0-100)
     - **search**: Search in subject and sender
+    - **starred**: Filter by starred status
+    - **archived**: Filter by archived status
     """
     # Build query for email communications
     query = db.query(CommunicationLog).filter(
         CommunicationLog.user_id == current_user.id,
-        CommunicationLog.communication_type == CommunicationType.EMAIL
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.is_deleted == False
     )
     
     # Apply filters
@@ -109,6 +118,12 @@ async def list_emails(
                 CommunicationLog.summary.ilike(search_pattern)
             )
         )
+    
+    if starred is not None:
+        query = query.filter(CommunicationLog.is_starred == starred)
+    
+    if archived is not None:
+        query = query.filter(CommunicationLog.is_archived == archived)
     
     # Order by urgency score (desc) and occurred date (desc)
     query = query.order_by(

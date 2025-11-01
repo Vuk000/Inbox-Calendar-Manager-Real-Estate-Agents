@@ -4,6 +4,7 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.2  # Compatible with passlib 1.7.4 (5.0.0 has compatibility issues)
 pydantic==2.11.4
 pydantic-settings==2.6.1
 
@@ -11,13 +12,13 @@ pydantic-settings==2.6.1
 sqlalchemy==2.0.44
 alembic==1.13.1
 psycopg2-binary==2.9.11
-redis==4.6.0
+redis==5.2.1  # Updated to match celery[redis] requirement
 
 # AI & ML
 anthropic==0.7.7
 # langchain==0.1.0  # Optional - requires numpy (compile on Python 3.13)
 # langchain-anthropic==0.1.0  # Optional - depends on langchain
-pinecone-client==4.1.2
+pinecone==7.3.0  # Updated from pinecone-client
 # tiktoken==0.5.2  # Optional - requires Rust compiler on Python 3.13
 # sentence-transformers==2.2.2  # Optional - requires numpy build on Python 3.13
 
@@ -64,7 +65,6 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 pytest-mock==3.12.0
 faker==20.1.0
-httpx==0.25.2
 
 # Code Quality
 black==23.12.0

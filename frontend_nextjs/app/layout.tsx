@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "react-hot-toast"
 import { Providers } from "@/lib/providers"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -23,7 +24,9 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.className} font-sans antialiased`}>
         <Providers>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
           <Toaster
             position="top-right"
             toastOptions={{
@@ -31,6 +34,9 @@ export default function RootLayout({
               style: {
                 background: '#333',
                 color: '#fff',
+              },
+              error: {
+                duration: 6000,
               },
             }}
           />

@@ -51,32 +51,36 @@ async def health_liveness():
 async def health_readiness(db: Session = Depends(get_db)):
     """
     Readiness probe - checks if app can serve traffic.
-    Verifies database and Redis connectivity.
-    Returns 200 if ready, 503 if not ready.
+    Verifies database connectivity. Redis is optional.
+    Returns 200 if database is ready, 503 if not ready.
     """
     checks = {
         "database": False,
-        "redis": False,
+        "redis": "optional",
         "overall": False
     }
     
-    # Check database
+    # Check database (required)
     try:
         db.execute(text("SELECT 1"))
         checks["database"] = True
     except Exception as e:
         logger.error(f"Database health check failed: {str(e)}")
     
-    # Check Redis
-    try:
-        redis_client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
-        redis_client.ping()
-        checks["redis"] = True
-    except Exception as e:
-        logger.error(f"Redis health check failed: {str(e)}")
+    # Check Redis (optional)
+    if settings.REDIS_ENABLED:
+        try:
+            redis_client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            redis_client.ping()
+            checks["redis"] = True
+        except Exception as e:
+            logger.warning(f"Redis health check failed (optional): {str(e)}")
+            checks["redis"] = False
+    else:
+        checks["redis"] = "disabled"
     
-    # Overall status
-    checks["overall"] = checks["database"] and checks["redis"]
+    # Overall status - only database is required
+    checks["overall"] = checks["database"]
     
     status_code = status.HTTP_200_OK if checks["overall"] else status.HTTP_503_SERVICE_UNAVAILABLE
     
@@ -119,22 +123,29 @@ async def health_detailed(db: Session = Depends(get_db)):
         }
         health_data["status"] = "degraded"
     
-    # Redis check
-    try:
-        redis_client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
-        redis_info = redis_client.info()
+    # Redis check (optional)
+    if settings.REDIS_ENABLED:
+        try:
+            redis_client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            redis_info = redis_client.info()
+            health_data["services"]["redis"] = {
+                "status": "up",
+                "version": redis_info.get("redis_version", "unknown"),
+                "used_memory": redis_info.get("used_memory_human", "unknown"),
+                "connected_clients": redis_info.get("connected_clients", 0)
+            }
+        except Exception as e:
+            health_data["services"]["redis"] = {
+                "status": "down",
+                "error": str(e),
+                "note": "Redis is optional - app will work without it"
+            }
+            # Don't mark overall status as degraded if Redis is down (it's optional)
+    else:
         health_data["services"]["redis"] = {
-            "status": "up",
-            "version": redis_info.get("redis_version", "unknown"),
-            "used_memory": redis_info.get("used_memory_human", "unknown"),
-            "connected_clients": redis_info.get("connected_clients", 0)
+            "status": "disabled",
+            "note": "Redis disabled in config"
         }
-    except Exception as e:
-        health_data["services"]["redis"] = {
-            "status": "down",
-            "error": str(e)
-        }
-        health_data["status"] = "degraded"
     
     # WebSocket connections
     try:
@@ -171,8 +182,8 @@ async def health_detailed(db: Session = Depends(get_db)):
         "status": "configured" if settings.MICROSOFT_CLIENT_ID else "not_configured"
     }
     
-    # Overall status determination
-    critical_services = ["database", "redis"]
+    # Overall status determination - only database is critical
+    critical_services = ["database"]
     all_critical_up = all(
         health_data["services"].get(svc, {}).get("status") == "up" 
         for svc in critical_services

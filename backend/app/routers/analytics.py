@@ -182,43 +182,43 @@ async def get_email_patterns(
     
     - **days**: Number of days to analyze (1-90)
     """
-    account_ids = [acc.id for acc in current_user.email_accounts if acc.is_active]
-    
-    if not account_ids:
-        return {
-            "total_emails": 0,
-            "by_priority": {},
-            "by_category": {},
-            "by_hour": {}
-        }
-    
     since_date = datetime.utcnow() - timedelta(days=days)
     
-    # Total emails
-    total = db.query(Message).filter(
-        Message.email_account_id.in_(account_ids),
-        Message.received_at >= since_date
+    # Total emails from CommunicationLog
+    total = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.occurred_at >= since_date
     ).count()
     
-    # By priority
-    by_priority = {}
-    for priority in MessagePriority:
-        count = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.received_at >= since_date,
-            Message.priority == priority
+    # By urgency score ranges (instead of MessagePriority)
+    by_priority = {
+        "high": db.query(CommunicationLog).filter(
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.communication_type == CommunicationType.EMAIL,
+            CommunicationLog.occurred_at >= since_date,
+            CommunicationLog.urgency_score >= 70
+        ).count(),
+        "medium": db.query(CommunicationLog).filter(
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.communication_type == CommunicationType.EMAIL,
+            CommunicationLog.occurred_at >= since_date,
+            CommunicationLog.urgency_score >= 40,
+            CommunicationLog.urgency_score < 70
+        ).count(),
+        "low": db.query(CommunicationLog).filter(
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.communication_type == CommunicationType.EMAIL,
+            CommunicationLog.occurred_at >= since_date,
+            CommunicationLog.urgency_score < 40
         ).count()
-        by_priority[priority.value] = count
+    }
     
-    # By category
-    by_category = {}
-    for category in MessageCategory:
-        count = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.received_at >= since_date,
-            Message.category == category
-        ).count()
-        by_category[category.value] = count
+    # By category (using key_topics or defaulting to "general")
+    # Simplified - in production would analyze key_topics field
+    by_category = {
+        "general": total  # Default until we implement category extraction
+    }
     
     # By hour of day (simplified - would need more complex query in production)
     by_hour = {str(i): 0 for i in range(24)}
@@ -250,19 +250,16 @@ async def get_reports(
     if not end_date:
         end_date = datetime.utcnow().date()
     
-    account_ids = [acc.id for acc in current_user.email_accounts if acc.is_active]
-    
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
     
-    # Email metrics
-    emails_processed = 0
-    if account_ids:
-        emails_processed = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.processed_at >= start_datetime,
-            Message.processed_at <= end_datetime
-        ).count()
+    # Email metrics from CommunicationLog
+    emails_processed = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.occurred_at >= start_datetime,
+        CommunicationLog.occurred_at <= end_datetime
+    ).count()
     
     # Time saved (0.1h per email)
     time_saved = round(emails_processed * 0.1, 1)
@@ -294,15 +291,13 @@ async def get_reports(
         Task.completed_at <= end_datetime
     ).count()
     
-    # Lead metrics
-    leads_qualified = 0
-    if account_ids:
-        leads_qualified = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.category == MessageCategory.LEAD,
-            Message.received_at >= start_datetime,
-            Message.received_at <= end_datetime
-        ).count()
+    # Lead metrics (contacts created from email)
+    leads_qualified = db.query(Contact).filter(
+        Contact.user_id == current_user.id,
+        Contact.lead_source == "email",
+        Contact.created_at >= start_datetime,
+        Contact.created_at <= end_datetime
+    ).count()
     
     return {
         "period": {
@@ -340,15 +335,12 @@ async def get_roi(
     # Last 30 days
     since_date = datetime.utcnow() - timedelta(days=30)
     
-    account_ids = [acc.id for acc in current_user.email_accounts if acc.is_active]
-    
-    # Emails processed
-    emails_processed = 0
-    if account_ids:
-        emails_processed = db.query(Message).filter(
-            Message.email_account_id.in_(account_ids),
-            Message.processed_at >= since_date
-        ).count()
+    # Emails processed from CommunicationLog
+    emails_processed = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.occurred_at >= since_date
+    ).count()
     
     # Time saved (0.1h per email)
     hours_saved = round(emails_processed * 0.1, 1)

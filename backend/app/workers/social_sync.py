@@ -5,7 +5,6 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from celery import Task
 from sqlalchemy.orm import Session
 
 from .celery_app import celery_app
@@ -21,6 +20,14 @@ from ..tasks.email_sync_task import process_email_with_ai
 
 logger = logging.getLogger(__name__)
 
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
+
 
 class BaseSocialSyncTask(Task):
     """Base Celery task providing DB session."""
@@ -33,7 +40,20 @@ class BaseSocialSyncTask(Task):
             db.close()
 
 
-@celery_app.task(base=BaseSocialSyncTask, bind=True, max_retries=3)
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(base=BaseSocialSyncTask, bind=True, max_retries=3)
 def sync_twitter_account(self, account_id: int, db: Session = None):
     """Sync Twitter/X DMs for a connected account."""
     account: Optional[SocialAccount] = db.query(SocialAccount).filter(
@@ -98,7 +118,7 @@ def sync_twitter_account(self, account_id: int, db: Session = None):
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
 
 
-@celery_app.task(base=BaseSocialSyncTask, bind=True, max_retries=3)
+@celery_task(base=BaseSocialSyncTask, bind=True, max_retries=3)
 def sync_facebook_account(self, account_id: int, db: Session = None):
     """Sync Facebook Messenger inbox."""
     account: Optional[SocialAccount] = db.query(SocialAccount).filter(

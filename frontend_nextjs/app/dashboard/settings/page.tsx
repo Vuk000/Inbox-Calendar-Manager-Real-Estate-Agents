@@ -1,6 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { User, Bell, Lock, CreditCard, Palette, Globe, Zap, Loader2, AlertCircle, Check, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +16,17 @@ import { Badge } from "@/components/ui/badge"
 import { authService, integrationService } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/authStore"
 import toast from "react-hot-toast"
+
+const passwordChangeSchema = z.object({
+  current_password: z.string().min(1, "Current password is required"),
+  new_password: z.string().min(8, "Password must be at least 8 characters"),
+  confirm_password: z.string().min(1, "Please confirm your password"),
+}).refine((data) => data.new_password === data.confirm_password, {
+  message: "Passwords do not match",
+  path: ["confirm_password"],
+})
+
+type PasswordChangeFormData = z.infer<typeof passwordChangeSchema>
 
 export default function SettingsPage() {
   const queryClient = useQueryClient()
@@ -44,6 +58,58 @@ export default function SettingsPage() {
   })
 
   const currentUser = userData || user
+
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { full_name?: string; phone_number?: string }) => {
+      return await authService.updateProfile(data)
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['user'] })
+      useAuthStore.getState().updateUser(data)
+      toast.success('Profile updated successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update profile')
+    },
+  })
+
+  // Password change mutation
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { current_password: string; new_password: string }) => {
+      return await authService.changePassword(data)
+    },
+    onSuccess: () => {
+      toast.success('Password changed successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to change password')
+    },
+  })
+
+  const handleProfileUpdate = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    updateProfileMutation.mutate({
+      full_name: formData.get('full_name') as string || undefined,
+      phone_number: formData.get('phone_number') as string || undefined,
+    })
+  }
+
+  const passwordForm = useForm<PasswordChangeFormData>({
+    resolver: zodResolver(passwordChangeSchema),
+  })
+
+  const handlePasswordChange = passwordForm.handleSubmit((data) => {
+    changePasswordMutation.mutate({
+      current_password: data.current_password,
+      new_password: data.new_password,
+    }, {
+      onSuccess: () => {
+        passwordForm.reset()
+      }
+    })
+  })
 
   return (
     <div className="space-y-6">
@@ -132,32 +198,49 @@ export default function SettingsPage() {
                   <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 </div>
               ) : (
-                <>
+                <form onSubmit={handleProfileUpdate} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="full_name">Full Name</Label>
-                    <Input id="full_name" defaultValue={currentUser?.full_name || ""} disabled />
-                    <p className="text-xs text-muted-foreground">Contact support to change your name</p>
+                    <Input 
+                      id="full_name" 
+                      name="full_name"
+                      defaultValue={currentUser?.full_name || ""} 
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input id="email" type="email" defaultValue={currentUser?.email || ""} disabled />
                     <p className="text-xs text-muted-foreground">Email cannot be changed</p>
                   </div>
-                  {currentUser?.phone_number && (
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" type="tel" defaultValue={currentUser.phone_number} disabled />
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="phone_number">Phone Number</Label>
+                    <Input 
+                      id="phone_number" 
+                      name="phone_number"
+                      type="tel" 
+                      defaultValue={currentUser?.phone_number || ""} 
+                    />
+                  </div>
                   <div className="pt-4 border-t border-border">
                     <Badge variant="outline" className="capitalize">
                       {currentUser?.role || "User"}
                     </Badge>
                     <Badge variant="secondary" className="ml-2 capitalize">
-                      {currentUser?.subscription_tier || "Free"} Plan
+                      {currentUser?.subscription_tier?.replace(/_/g, " ") || "Free"} Plan
                     </Badge>
                   </div>
-                </>
+                  <Button type="submit" disabled={updateProfileMutation.isPending} className="glow-border">
+                    {updateProfileMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                </form>
               )}
             </CardContent>
           </Card>
@@ -282,27 +365,65 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <Label>Two-Factor Authentication</Label>
-                  <p className="text-xs text-muted-foreground">Add an extra layer of security</p>
+              <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="current_password">Current Password</Label>
+                  <Input 
+                    id="current_password" 
+                    type="password" 
+                    {...passwordForm.register("current_password")}
+                    className={passwordForm.formState.errors.current_password ? "border-destructive" : ""}
+                  />
+                  {passwordForm.formState.errors.current_password && (
+                    <p className="text-sm text-destructive">
+                      {passwordForm.formState.errors.current_password.message}
+                    </p>
+                  )}
                 </div>
-                <Button variant="outline" size="sm">
-                  Enable
-                </Button>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <Label>Login Alerts</Label>
-                  <p className="text-xs text-muted-foreground">Get notified of new logins</p>
+                <div className="space-y-2">
+                  <Label htmlFor="new_password">New Password</Label>
+                  <Input 
+                    id="new_password" 
+                    type="password" 
+                    {...passwordForm.register("new_password")}
+                    className={passwordForm.formState.errors.new_password ? "border-destructive" : ""}
+                  />
+                  {passwordForm.formState.errors.new_password && (
+                    <p className="text-sm text-destructive">
+                      {passwordForm.formState.errors.new_password.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
                 </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="pt-4 border-t border-border">
-                <Button variant="outline" className="w-full">
-                  Change Password
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_password">Confirm New Password</Label>
+                  <Input 
+                    id="confirm_password" 
+                    type="password" 
+                    {...passwordForm.register("confirm_password")}
+                    className={passwordForm.formState.errors.confirm_password ? "border-destructive" : ""}
+                  />
+                  {passwordForm.formState.errors.confirm_password && (
+                    <p className="text-sm text-destructive">
+                      {passwordForm.formState.errors.confirm_password.message}
+                    </p>
+                  )}
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={changePasswordMutation.isPending || passwordForm.formState.isSubmitting}
+                  className="glow-border"
+                >
+                  {changePasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Changing...
+                    </>
+                  ) : (
+                    "Change Password"
+                  )}
                 </Button>
-              </div>
+              </form>
             </CardContent>
           </Card>
         </TabsContent>

@@ -75,3 +75,7 @@ tmp/
 temp/
 *.tmp
 
+# Temporary directories (removed, but prevent re-adding)
+temp_frontend_repo/
+frontend/
+

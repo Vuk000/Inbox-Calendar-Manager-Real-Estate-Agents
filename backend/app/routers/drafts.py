@@ -22,14 +22,14 @@ router = APIRouter()
 
 # Pydantic schemas
 class GenerateDraftRequest(BaseModel):
-    message_id: int
+    communication_log_id: int  # Changed from message_id
     num_variants: int = 1
     context: Optional[dict] = None
 
 
 class DraftResponse(BaseModel):
     id: int
-    message_id: int
+    communication_log_id: Optional[int]  # Changed from message_id
     subject: Optional[str]
     content: str
     variant_number: int
@@ -55,7 +55,7 @@ async def generate_draft(
     """
     Generate AI draft responses for an email.
     
-    - **message_id**: Original email to reply to
+    - **communication_log_id**: Original communication to reply to
     - **num_variants**: Number of draft variations (1-3)
     - **context**: Optional additional context (CRM data, market data)
     """
@@ -73,25 +73,24 @@ async def generate_draft(
             detail="AI actions limit exceeded for this month"
         )
     
-    # Get message
-    account_ids = [acc.id for acc in current_user.email_accounts if acc.is_active]
-    message = db.query(Message).filter(
-        Message.id == request.message_id,
-        Message.email_account_id.in_(account_ids)
+    # Get communication log
+    comm_log = db.query(CommunicationLog).filter(
+        CommunicationLog.id == request.communication_log_id,
+        CommunicationLog.user_id == current_user.id
     ).first()
     
-    if not message:
+    if not comm_log:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email not found"
+            detail="Communication not found"
         )
     
     # Prepare email data
     email_data = {
-        "subject": message.subject,
-        "body": decrypt_data(message.encrypted_body),
-        "sender_email": message.sender_email,
-        "sender_name": message.sender_name,
+        "subject": comm_log.subject,
+        "body": comm_log.body or comm_log.summary or "",
+        "sender_email": comm_log.from_address or "",
+        "sender_name": comm_log.from_address or "Unknown",
         "thread_context": ""  # TODO: Fetch thread history
     }
     
@@ -125,8 +124,8 @@ async def generate_draft(
         
         new_draft = Draft(
             user_id=current_user.id,
-            message_id=message.id,
-            subject=f"Re: {message.subject}",
+            communication_log_id=comm_log.id,
+            subject=f"Re: {comm_log.subject}" if comm_log.subject else "Re: (No subject)",
             generated_content=draft_data["content"],
             confidence_score=draft_data.get("confidence_score"),
             variant_number=draft_data.get("variant_number", 1),
@@ -140,7 +139,7 @@ async def generate_draft(
         
         draft_responses.append(DraftResponse(
             id=new_draft.id,
-            message_id=new_draft.message_id,
+            communication_log_id=new_draft.communication_log_id,
             subject=new_draft.subject,
             content=new_draft.generated_content,
             variant_number=new_draft.variant_number,
@@ -158,8 +157,8 @@ async def generate_draft(
         db=db,
         action="generate_draft",
         user_id=current_user.id,
-        resource_type="message",
-        resource_id=message.id,
+        resource_type="communication_log",
+        resource_id=comm_log.id,
         description=f"Generated {len(draft_responses)} draft(s) for email"
     )
     
@@ -178,7 +177,7 @@ async def list_drafts(
     
     return [DraftResponse(
         id=d.id,
-        message_id=d.message_id,
+        communication_log_id=d.communication_log_id,
         subject=d.subject,
         content=d.final_content or d.generated_content,
         variant_number=d.variant_number,
@@ -208,7 +207,7 @@ async def get_draft(
     
     return DraftResponse(
         id=draft.id,
-        message_id=draft.message_id,
+        communication_log_id=draft.communication_log_id,
         subject=draft.subject,
         content=draft.final_content or draft.generated_content,
         variant_number=draft.variant_number,
@@ -283,66 +282,73 @@ async def send_draft(
             detail="Draft not found"
         )
     
-    # Get original message for threading
-    message = db.query(Message).filter(Message.id == draft.message_id).first()
-    
-    if not message:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original message not found"
-        )
-    
-    # Get email account to send from
-    email_account = db.query(EmailAccount).join(Message).filter(
-        Message.id == draft.message_id
+    # Get original communication log for threading
+    comm_log = db.query(CommunicationLog).filter(
+        CommunicationLog.id == draft.communication_log_id
     ).first()
     
-    if email_account:
-        try:
-            # Get final content to send
-            content_to_send = draft.final_content or draft.generated_content
+    if not comm_log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original communication not found"
+        )
+    
+    # Get email account to send from (use first active account)
+    email_account = None
+    if current_user.email_accounts:
+        email_account = next((acc for acc in current_user.email_accounts if acc.is_active), None)
+    
+    if not email_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active email account found"
+        )
+    
+    try:
+        # Get final content to send
+        content_to_send = draft.final_content or draft.generated_content
+        
+        # Send via appropriate provider
+        if email_account.provider == EmailProvider.GMAIL:
+            from ..integrations.gmail_integration import GmailIntegration
+            gmail = GmailIntegration()
+            import asyncio
+            send_result = asyncio.run(gmail.send_message(
+                encrypted_access_token=email_account.encrypted_access_token,
+                to=comm_log.from_address or "",
+                subject=draft.subject or f"Re: {comm_log.subject or 'No subject'}",
+                body=content_to_send,
+                encrypted_refresh_token=email_account.encrypted_refresh_token,
+                in_reply_to=comm_log.external_id,
+                references=comm_log.external_id
+            ))
             
-            # Send via appropriate provider
-            if email_account.provider == EmailProvider.GMAIL:
-                from ..integrations.gmail_integration import GmailIntegration
-                gmail = GmailIntegration()
-                import asyncio
-                send_result = asyncio.run(gmail.send_message(
-                    encrypted_access_token=email_account.encrypted_access_token,
-                    to=message.sender_email,
-                    subject=draft.subject or f"Re: {message.subject}",
-                    body=content_to_send,
-                    encrypted_refresh_token=email_account.encrypted_refresh_token,
-                    in_reply_to=message.external_id,
-                    references=message.external_id
-                ))
-                
-                if not send_result.get("success"):
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Failed to send email: {send_result.get('error')}"
-                    )
-            else:  # Outlook
-                from ..integrations.outlook_integration import OutlookIntegration
-                outlook = OutlookIntegration()
-                import asyncio
-                send_result = asyncio.run(outlook.send_message(
-                    encrypted_access_token=email_account.encrypted_access_token,
-                    to=[message.sender_email],
-                    subject=draft.subject or f"Re: {message.subject}",
-                    body=content_to_send
-                ))
-                
-                if not send_result.get("success"):
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Failed to send email: {send_result.get('error')}"
-                    )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error sending email: {str(e)}"
-            )
+            if not send_result.get("success"):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to send email: {send_result.get('error')}"
+                )
+        else:  # Outlook
+            from ..integrations.outlook_integration import OutlookIntegration
+            outlook = OutlookIntegration()
+            import asyncio
+            send_result = asyncio.run(outlook.send_message(
+                encrypted_access_token=email_account.encrypted_access_token,
+                to=[comm_log.from_address or ""],
+                subject=draft.subject or f"Re: {comm_log.subject or 'No subject'}",
+                body=content_to_send
+            ))
+            
+            if not send_result.get("success"):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to send email: {send_result.get('error')}"
+                )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error sending email: {str(e)}"
+        )
     
     draft.approval_status = DraftStatus.SENT
     draft.sent_at = datetime.utcnow()

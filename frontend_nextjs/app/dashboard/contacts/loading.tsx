@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/LoadingSkeleton"
+
 export default function Loading() {
-  return null
+  return <ListSkeleton count={5} />
 }

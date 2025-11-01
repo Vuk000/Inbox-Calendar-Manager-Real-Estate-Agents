@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -32,115 +34,122 @@ import {
   Clock,
   Video,
   DollarSign,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
-
-// Mock timeline data
-const timelineEvents = [
-  {
-    id: 1,
-    type: "email",
-    title: "Email sent: Property viewing confirmation",
-    description: "Confirmed viewing appointment for 123 Main St on Friday at 2 PM",
-    timestamp: "2 hours ago",
-    date: "Today, 2:30 PM",
-  },
-  {
-    id: 2,
-    type: "call",
-    title: "Phone call: Initial consultation",
-    description: "Discussed budget, preferences, and timeline. Client interested in 3-bed homes in downtown area.",
-    timestamp: "1 day ago",
-    date: "Yesterday, 10:15 AM",
-  },
-  {
-    id: 3,
-    type: "meeting",
-    title: "In-person meeting at office",
-    description: "Reviewed market analysis and discussed financing options. Client pre-approved for $500K.",
-    timestamp: "3 days ago",
-    date: "Monday, 3:00 PM",
-  },
-  {
-    id: 4,
-    type: "note",
-    title: "Added note",
-    description: "Client mentioned they need to move by end of quarter due to job relocation.",
-    timestamp: "5 days ago",
-    date: "Saturday, 11:20 AM",
-  },
-  {
-    id: 5,
-    type: "email",
-    title: "Email received: Inquiry about listings",
-    description: "Client asked about new listings in the Marina district. Sent 5 properties matching criteria.",
-    timestamp: "1 week ago",
-    date: "Last Thursday, 4:45 PM",
-  },
-  {
-    id: 6,
-    type: "task",
-    title: "Task completed: Send market report",
-    description: "Sent comprehensive market analysis for target neighborhoods.",
-    timestamp: "1 week ago",
-    date: "Last Wednesday, 9:30 AM",
-  },
-]
-
-const getTimelineIcon = (type: string) => {
-  switch (type) {
-    case "email":
-      return <Mail className="w-4 h-4" />
-    case "call":
-      return <Phone className="w-4 h-4" />
-    case "meeting":
-      return <Video className="w-4 h-4" />
-    case "note":
-      return <FileText className="w-4 h-4" />
-    case "task":
-      return <CheckCircle2 className="w-4 h-4" />
-    default:
-      return <Clock className="w-4 h-4" />
-  }
-}
-
-const getTimelineColor = (type: string) => {
-  switch (type) {
-    case "email":
-      return "bg-blue-500"
-    case "call":
-      return "bg-green-500"
-    case "meeting":
-      return "bg-purple-500"
-    case "note":
-      return "bg-yellow-500"
-    case "task":
-      return "bg-primary"
-    default:
-      return "bg-muted"
-  }
-}
+import { contactsService, communicationsService } from "@/lib/api"
+import toast from "react-hot-toast"
+import { formatDistanceToNow, format } from "date-fns"
 
 export default function ContactDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  const queryClient = useQueryClient()
   const [newNote, setNewNote] = useState("")
 
-  // Mock contact data
-  const contact = {
-    id: params.id,
-    name: "Sarah Johnson",
-    email: "sarah.j@email.com",
-    phone: "(555) 123-4567",
-    location: "Los Angeles, CA",
-    status: "Hot Lead",
-    priority: "high",
-    tags: ["Buyer", "First-time"],
-    budget: "$400K - $500K",
-    preferences: "3-bed, 2-bath, downtown area",
-    timeline: "Next 3 months",
-    source: "Website inquiry",
-    assignedTo: "John Doe",
-    createdAt: "Jan 15, 2025",
-    lastContact: "2 hours ago",
+  // Fetch contact details
+  const { data: contact, isLoading: isLoadingContact, error: contactError } = useQuery({
+    queryKey: ['contact', params.id],
+    queryFn: async () => {
+      return await contactsService.getContact(parseInt(params.id))
+    },
+    enabled: !!params.id,
+  })
+
+  // Fetch communications timeline
+  const { data: communications = [], isLoading: isLoadingTimeline } = useQuery({
+    queryKey: ['communications', params.id],
+    queryFn: async () => {
+      const response = await communicationsService.listCommunications({
+        contact_id: parseInt(params.id),
+        limit: 100,
+      })
+      return Array.isArray(response) ? response : []
+    },
+    enabled: !!params.id,
+  })
+
+  // Delete contact mutation
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await contactsService.deleteContact(parseInt(params.id))
+    },
+    onSuccess: () => {
+      toast.success('Contact deleted successfully')
+      router.push('/dashboard/contacts')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete contact')
+    },
+  })
+
+  const handleDelete = () => {
+    if (contact && confirm(`Are you sure you want to delete ${contact.full_name || contact.email}?`)) {
+      deleteMutation.mutate()
+    }
   }
+
+  const getTimelineIcon = (type: string) => {
+    switch (type) {
+      case "email":
+        return <Mail className="w-4 h-4" />
+      case "phone_call":
+        return <Phone className="w-4 h-4" />
+      case "meeting":
+        return <Video className="w-4 h-4" />
+      case "note":
+        return <FileText className="w-4 h-4" />
+      case "sms":
+        return <Phone className="w-4 h-4" />
+      default:
+        return <Clock className="w-4 h-4" />
+    }
+  }
+
+  const getTimelineColor = (type: string) => {
+    switch (type) {
+      case "email":
+        return "bg-blue-500"
+      case "phone_call":
+      case "sms":
+        return "bg-green-500"
+      case "meeting":
+        return "bg-purple-500"
+      case "note":
+        return "bg-yellow-500"
+      default:
+        return "bg-muted"
+    }
+  }
+
+  if (isLoadingContact) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (contactError || !contact) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <AlertCircle className="w-8 h-8 text-destructive mb-4" />
+        <p className="text-destructive">Failed to load contact</p>
+        <Button variant="outline" className="mt-4" asChild>
+          <Link href="/dashboard/contacts">Back to Contacts</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  // Format timeline events from communications
+  const timelineEvents = communications.map((comm: any) => ({
+    id: comm.id,
+    type: comm.communication_type || 'email',
+    title: comm.subject || `${comm.communication_type || 'Communication'} from ${comm.from_address || 'Unknown'}`,
+    description: comm.summary || comm.body || 'No description available',
+    timestamp: formatDistanceToNow(new Date(comm.occurred_at), { addSuffix: true }),
+    date: format(new Date(comm.occurred_at), 'MMM d, yyyy h:mm a'),
+  }))
 
   return (
     <div className="space-y-6">
@@ -152,7 +161,7 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">{contact.name}</h1>
+          <h1 className="text-3xl font-bold">{contact.full_name || contact.email}</h1>
           <p className="text-muted-foreground mt-1">Contact details and interaction history</p>
         </div>
         <DropdownMenu>
@@ -164,7 +173,7 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(`/dashboard/contacts/${params.id}/edit`)}>
               <Edit className="w-4 h-4 mr-2" />
               Edit Contact
             </DropdownMenuItem>
@@ -177,7 +186,7 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
               Schedule Meeting
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Contact
             </DropdownMenuItem>
@@ -193,27 +202,31 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
             <CardContent className="p-6">
               <div className="flex flex-col items-center text-center space-y-4">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={`/.jpg?height=96&width=96&query=${contact.name}`} />
+                  <AvatarImage src={`/.jpg?height=96&width=96&query=${contact.full_name || contact.email}`} />
                   <AvatarFallback className="text-2xl">
-                    {contact.name
+                    {(contact.full_name || contact.email || "C")
                       .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+                      .map((n: string) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-1">
-                  <h2 className="text-xl font-bold">{contact.name}</h2>
-                  <Badge variant={contact.priority === "high" ? "destructive" : "secondary"} className="text-xs">
-                    {contact.status}
+                  <h2 className="text-xl font-bold">{contact.full_name || contact.email}</h2>
+                  <Badge variant={contact.contact_status === "hot_lead" ? "destructive" : "secondary"} className="text-xs">
+                    {contact.contact_status?.replace(/_/g, " ") || "Active"}
                   </Badge>
                 </div>
-                <div className="flex flex-wrap gap-1 justify-center">
-                  {contact.tags.map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
+                {contact.tags && contact.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {contact.tags.map((tag: string) => (
+                      <Badge key={tag} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 space-y-3">
@@ -244,36 +257,46 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
                   <Mail className="w-4 h-4" />
                   <span className="font-medium">Email</span>
                 </div>
-                <p className="text-sm pl-6">{contact.email}</p>
+                <p className="text-sm pl-6">{contact.email || "Not provided"}</p>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="w-4 h-4" />
-                  <span className="font-medium">Phone</span>
+              {contact.phone && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="w-4 h-4" />
+                    <span className="font-medium">Phone</span>
+                  </div>
+                  <p className="text-sm pl-6">{contact.phone}</p>
                 </div>
-                <p className="text-sm pl-6">{contact.phone}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                  <span className="font-medium">Location</span>
+              )}
+              {(contact.city || contact.state) && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="w-4 h-4" />
+                    <span className="font-medium">Location</span>
+                  </div>
+                  <p className="text-sm pl-6">{[contact.city, contact.state].filter(Boolean).join(", ") || "Not provided"}</p>
                 </div>
-                <p className="text-sm pl-6">{contact.location}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <DollarSign className="w-4 h-4" />
-                  <span className="font-medium">Budget</span>
+              )}
+              {contact.budget_max && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <DollarSign className="w-4 h-4" />
+                    <span className="font-medium">Budget</span>
+                  </div>
+                  <p className="text-sm pl-6">
+                    ${contact.budget_min?.toLocaleString() || "0"} - ${contact.budget_max?.toLocaleString() || "0"}
+                  </p>
                 </div>
-                <p className="text-sm pl-6">{contact.budget}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span className="font-medium">Timeline</span>
+              )}
+              {contact.last_contact_date && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span className="font-medium">Last Contact</span>
+                  </div>
+                  <p className="text-sm pl-6">{formatDistanceToNow(new Date(contact.last_contact_date), { addSuffix: true })}</p>
                 </div>
-                <p className="text-sm pl-6">{contact.timeline}</p>
-              </div>
+              )}
             </CardContent>
           </Card>
 
@@ -283,22 +306,30 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
               <CardTitle className="text-lg">Additional Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Source</span>
-                <span className="font-medium">{contact.source}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Assigned to</span>
-                <span className="font-medium">{contact.assignedTo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Created</span>
-                <span className="font-medium">{contact.createdAt}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Last contact</span>
-                <span className="font-medium">{contact.lastContact}</span>
-              </div>
+              {contact.lead_source && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="font-medium">{contact.lead_source.replace(/_/g, " ")}</span>
+                </div>
+              )}
+              {contact.created_at && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Created</span>
+                  <span className="font-medium">{format(new Date(contact.created_at), "MMM d, yyyy")}</span>
+                </div>
+              )}
+              {contact.relationship_score !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Relationship Score</span>
+                  <span className="font-medium">{Math.round(contact.relationship_score)}%</span>
+                </div>
+              )}
+              {contact.last_contact_date && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Last contact</span>
+                  <span className="font-medium">{formatDistanceToNow(new Date(contact.last_contact_date), { addSuffix: true })}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -345,8 +376,19 @@ export default function ContactDetailPage({ params }: { params: { id: string } }
               </Card>
 
               {/* Timeline */}
-              <div className="space-y-4">
-                {timelineEvents.map((event, index) => (
+              {isLoadingTimeline ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : timelineEvents.length === 0 ? (
+                <Card className="glass-card">
+                  <CardContent className="p-6">
+                    <p className="text-muted-foreground text-center py-8">No communications yet</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {timelineEvents.map((event, index) => (
                   <Card key={event.id} className="glass-card">
                     <CardContent className="p-6">
                       <div className="flex gap-4">

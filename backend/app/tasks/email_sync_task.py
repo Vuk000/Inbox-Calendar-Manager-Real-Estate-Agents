@@ -2,8 +2,7 @@
 Email synchronization tasks using Celery
 Handles periodic sync of Gmail and Outlook accounts
 """
-from typing import List
-from celery import Task
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
@@ -31,6 +30,14 @@ from ..shared.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
+
 
 class BaseEmailSyncTask(Task):
     """Base task with database session management"""
@@ -43,7 +50,20 @@ class BaseEmailSyncTask(Task):
             db.close()
 
 
-@celery_app.task(base=BaseEmailSyncTask, bind=True, max_retries=3)
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(base=BaseEmailSyncTask, bind=True, max_retries=3)
 def sync_gmail_account(self, user_id: int, account_id: int, db: Session = None) -> dict:
     """
     Sync emails from a Gmail account.
@@ -221,7 +241,7 @@ def sync_gmail_account(self, user_id: int, account_id: int, db: Session = None) 
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
 
-@celery_app.task(base=BaseEmailSyncTask, bind=True, max_retries=3)
+@celery_task(base=BaseEmailSyncTask, bind=True, max_retries=3)
 def sync_outlook_account(self, user_id: int, account_id: int, db: Session = None) -> dict:
     """
     Sync emails from an Outlook account.
@@ -382,7 +402,7 @@ def sync_outlook_account(self, user_id: int, account_id: int, db: Session = None
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
 
-@celery_app.task(base=BaseEmailSyncTask, bind=True)
+@celery_task(base=BaseEmailSyncTask, bind=True)
 def process_email_with_ai(self, comm_log_id: int, db: Session = None) -> dict:
     """
     Process an email with AI triage agent.
@@ -449,7 +469,7 @@ def process_email_with_ai(self, comm_log_id: int, db: Session = None) -> dict:
         return {"status": "error", "error": str(e)}
 
 
-@celery_app.task(base=BaseEmailSyncTask)
+@celery_task(base=BaseEmailSyncTask)
 def sync_all_gmail_accounts(db: Session = None) -> dict:
     """
     Sync all active Gmail accounts (periodic task).
@@ -470,7 +490,7 @@ def sync_all_gmail_accounts(db: Session = None) -> dict:
     return {"status": "queued", "count": len(accounts)}
 
 
-@celery_app.task(base=BaseEmailSyncTask)
+@celery_task(base=BaseEmailSyncTask)
 def sync_all_outlook_accounts(db: Session = None) -> dict:
     """
     Sync all active Outlook accounts (periodic task).

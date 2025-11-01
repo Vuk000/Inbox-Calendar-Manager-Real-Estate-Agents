@@ -38,6 +38,21 @@ async def lifespan(app: FastAPI):
     setup_audit_listeners()
     print("✅ Audit listeners registered")
     
+    # Verify password hashing is available
+    try:
+        from .security.encryption import hash_password
+        hash_password("test")
+        print("✅ Password hashing initialized")
+    except Exception as e:
+        print(f"⚠️ Password hashing warning: {e}")
+    
+    # Check Redis/Celery status
+    from .workers.celery_app import celery_app
+    if celery_app is None:
+        print("ℹ️ Celery disabled (Redis optional)")
+    else:
+        print("✅ Celery available (background tasks enabled)")
+    
     yield
     
     # Shutdown

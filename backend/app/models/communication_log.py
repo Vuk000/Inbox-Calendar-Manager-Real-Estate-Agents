@@ -67,6 +67,11 @@ class CommunicationLog(Base):
     has_attachments = Column(Boolean, default=False)
     attachments = Column(JSON, default=[])  # [{filename, url, size}]
     
+    # User actions
+    is_starred = Column(Boolean, default=False, index=True)
+    is_archived = Column(Boolean, default=False, index=True)
+    is_deleted = Column(Boolean, default=False, index=True)
+    
     # Timestamps
     occurred_at = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

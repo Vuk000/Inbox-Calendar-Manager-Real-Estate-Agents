@@ -98,6 +98,32 @@ alembic current
 # Should show: 004_drop_messages_clean_slate (head)
 ```
 
+### 2.5 Start Backend Server
+
+```bash
+# Start the FastAPI server
+python -m uvicorn app.main:app --reload
+```
+
+**Expected output:**
+```
+🚀 Starting Project Apex...
+✅ Database initialized
+✅ Audit listeners registered
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+INFO:     Started server process
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
+
+**Verify backend is running:**
+- Open http://localhost:8000/health in your browser
+- Should see: `{"status":"healthy","app":"RealInbox AI",...}`
+- API docs available at: http://localhost:8000/api/v1/docs
+
+**Note**: Redis warnings are normal if Redis is not running. Redis is optional for basic functionality.
+
 If you need to reset the database:
 
 ```bash

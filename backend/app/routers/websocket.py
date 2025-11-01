@@ -42,17 +42,17 @@ async def websocket_endpoint(
         await websocket.close(code=1008, reason="Invalid token")
         return
     
-    user_id = payload.get("user_id")
+    user_id = payload.get("sub")
     
     # Get user from database
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == int(user_id)).first()
     
     if not user or not user.is_active:
         await websocket.close(code=1008, reason="User not found or inactive")
         return
     
     # Connect
-    await manager.connect(websocket, user_id)
+    await manager.connect(websocket, int(user_id))
     
     try:
         while True:
@@ -84,5 +84,5 @@ async def websocket_endpoint(
                 )
         
     except WebSocketDisconnect:
-        manager.disconnect(websocket, user_id)
+        manager.disconnect(websocket, int(user_id))
 

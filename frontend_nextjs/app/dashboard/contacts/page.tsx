@@ -22,11 +22,16 @@ import { contactsService } from "@/lib/api"
 import toast from "react-hot-toast"
 import { formatDistanceToNow } from "date-fns"
 import { ContactCreateDialog } from "@/components/ContactCreateDialog"
+import { ErrorDisplay } from "@/components/ErrorDisplay"
+import { EmptyState } from "@/components/EmptyState"
+import { ListSkeleton } from "@/components/LoadingSkeleton"
+import { Users } from "lucide-react"
 
 export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editingContact, setEditingContact] = useState<any>(null)
   const queryClient = useQueryClient()
 
   // Fetch contacts with React Query
@@ -173,32 +178,15 @@ export default function ContactsPage() {
       </div>
 
       {/* Loading state */}
-      {isLoading && (
-        <Card className="glass-card">
-          <CardContent className="p-12 text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading contacts...</p>
-          </CardContent>
-        </Card>
-      )}
+      {isLoading && <ListSkeleton count={5} />}
 
       {/* Error state */}
       {error && (
-        <Card className="glass-card border-destructive">
-          <CardContent className="p-12 text-center">
-            <p className="text-destructive mb-2">Failed to load contacts</p>
-            <p className="text-sm text-muted-foreground">
-              {(error as any)?.response?.data?.detail || (error as any)?.message || 'Unknown error'}
-            </p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['contacts'] })}
-            >
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
+        <ErrorDisplay
+          error={error}
+          title="Failed to load contacts"
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['contacts'] })}
+        />
       )}
 
       {/* Contacts list */}
@@ -255,6 +243,10 @@ export default function ContactsPage() {
                                 View Details
                               </Link>
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingContact(contact)}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Contact
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Mail className="w-4 h-4 mr-2" />
                               Send Email
@@ -283,10 +275,10 @@ export default function ContactsPage() {
                             <span className="truncate">{contact.email}</span>
                           </div>
                         )}
-                        {contact.phone_number && (
+                        {contact.phone && (
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Phone className="h-4 w-4" />
-                            <span>{contact.phone_number}</span>
+                            <span>{contact.phone}</span>
                           </div>
                         )}
                         {location !== 'No location' && (
@@ -317,25 +309,34 @@ export default function ContactsPage() {
               })}
             </div>
           ) : (
-            <Card className="glass-card">
-              <CardContent className="p-12 text-center">
-                <p className="text-muted-foreground mb-4">No contacts found.</p>
+            <EmptyState
+              icon={Users}
+              title="No contacts found"
+              description={searchQuery || statusFilter !== 'all' 
+                ? "Try adjusting your search or filter criteria"
+                : "Get started by adding your first contact"}
+              action={
                 <Button onClick={() => setIsCreateDialogOpen(true)}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Contact
+                  Add Contact
                 </Button>
-              </CardContent>
-            </Card>
+              }
+            />
           )}
         </>
       )}
 
-      {/* Create Contact Dialog */}
+      {/* Create/Edit Contact Dialog */}
       <ContactCreateDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
+        open={isCreateDialogOpen || !!editingContact}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open)
+          if (!open) setEditingContact(null)
+        }}
+        initialData={editingContact}
         onSuccess={() => {
           setIsCreateDialogOpen(false)
+          setEditingContact(null)
           queryClient.invalidateQueries({ queryKey: ['contacts'] })
         }}
       />

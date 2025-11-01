@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useAuthStore, useAuthHydration } from "@/lib/stores/authStore"
 import { areTokensValid } from "@/lib/utils/auth"
+import { checkBackendHealth } from "@/lib/api"
 import toast from "react-hot-toast"
 
 interface WebSocketMessage {
@@ -19,6 +20,7 @@ interface UseWebSocketOptions {
   reconnectInterval?: number
   maxReconnectAttempts?: number
   enabled?: boolean // Allow disabling the connection
+  skipHealthCheck?: boolean // Skip health check (for testing)
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -30,17 +32,21 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     reconnectInterval = 5000,
     maxReconnectAttempts = 5,
     enabled = true,
+    skipHealthCheck = false,
   } = options
 
   const { accessToken, refreshToken } = useAuthStore()
   const hasHydrated = useAuthHydration()
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const healthCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const backendOnlineRef = useRef<boolean | null>(null)
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     // Don't connect if disabled
     if (!enabled) {
       console.log("[WebSocket] Connection disabled")
@@ -64,6 +70,28 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       return
     }
 
+    // Check backend health before attempting connection (unless skipped)
+    if (!skipHealthCheck) {
+      const isHealthy = await checkBackendHealth()
+      setBackendOnline(isHealthy)
+      backendOnlineRef.current = isHealthy
+      
+      if (!isHealthy) {
+        // Backend is offline - don't attempt connection, but schedule health check retry
+        console.log("[WebSocket] Backend is offline, skipping connection attempt")
+        
+        // Schedule health check retry after a delay
+        if (healthCheckTimeoutRef.current) {
+          clearTimeout(healthCheckTimeoutRef.current)
+        }
+        healthCheckTimeoutRef.current = setTimeout(() => {
+          connect()
+        }, reconnectInterval)
+        
+        return
+      }
+    }
+
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws"
     const url = `${wsUrl}?token=${accessToken}`
 
@@ -73,6 +101,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       ws.onopen = () => {
         console.log("[WebSocket] Connected")
         setIsConnected(true)
+        setBackendOnline(true)
+        backendOnlineRef.current = true
         reconnectAttemptsRef.current = 0
         onConnect?.()
       }
@@ -86,13 +116,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
           // Handle specific message types
           if (message.type === "new_email") {
-            toast.success(`New email: ${message.data.subject || "No subject"}`)
-          } else if (message.type === "task_updated") {
-            toast.success(`Task updated: ${message.data.title || "Task"}`)
+            toast.success(`New email: ${message.data?.subject || "No subject"}`, { duration: 4000 })
+          } else if (message.type === "task_update") {
+            toast.success(`Task updated: ${message.data?.title || "Task"}`, { duration: 3000 })
           } else if (message.type === "urgent_email") {
-            toast.error(`Urgent email: ${message.data.subject || "No subject"}`, {
+            toast.error(`Urgent email: ${message.data?.subject || "No subject"}`, {
               duration: 8000,
             })
+          } else if (message.type === "draft_ready") {
+            toast.success(`AI draft ready: ${message.data?.subject || "Draft"}`, { duration: 4000 })
+          } else if (message.type === "sync_status" && message.data?.status === "complete") {
+            toast.success("Email sync completed", { duration: 3000 })
           }
         } catch (error) {
           console.error("[WebSocket] Failed to parse message:", error)
@@ -100,17 +134,25 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       }
 
       ws.onerror = (error) => {
-        console.error("[WebSocket] Error:", error)
-        onError?.(error as any)
+        // Only log errors if backend is supposed to be online
+        // Suppress errors when backend is known to be offline (expected behavior)
+        if (backendOnlineRef.current !== false) {
+          console.error("[WebSocket] Error:", error)
+          onError?.(error as any)
+        } else {
+          // Backend is offline, this is expected - don't log as error
+          console.log("[WebSocket] Connection error (backend offline)")
+        }
       }
 
-      ws.onclose = () => {
-        console.log("[WebSocket] Disconnected")
+      ws.onclose = (event) => {
+        console.log("[WebSocket] Disconnected", event.code)
         setIsConnected(false)
         onDisconnect?.()
 
-        // Attempt to reconnect
-        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+        // Only attempt reconnection if backend was online
+        // If backend is offline, we'll retry after health check
+        if (backendOnlineRef.current !== false && reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current += 1
           console.log(
             `[WebSocket] Reconnecting (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`
@@ -118,21 +160,39 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           reconnectTimeoutRef.current = setTimeout(() => {
             connect()
           }, reconnectInterval)
+        } else if (backendOnlineRef.current === false) {
+          // Backend is offline - schedule health check retry
+          console.log("[WebSocket] Backend offline, will retry after health check")
+          if (healthCheckTimeoutRef.current) {
+            clearTimeout(healthCheckTimeoutRef.current)
+          }
+          healthCheckTimeoutRef.current = setTimeout(() => {
+            connect()
+          }, reconnectInterval)
         } else {
-          console.error("[WebSocket] Max reconnection attempts reached")
+          console.log("[WebSocket] Max reconnection attempts reached")
         }
       }
 
       wsRef.current = ws
     } catch (error) {
-      console.error("[WebSocket] Failed to create connection:", error)
+      // Suppress errors when backend is known to be offline
+      if (backendOnlineRef.current !== false) {
+        console.error("[WebSocket] Failed to create connection:", error)
+      } else {
+        console.log("[WebSocket] Cannot create connection (backend offline)")
+      }
     }
-  }, [accessToken, onMessage, onError, onConnect, onDisconnect, reconnectInterval, maxReconnectAttempts])
+  }, [accessToken, refreshToken, enabled, hasHydrated, skipHealthCheck, reconnectInterval, maxReconnectAttempts, onMessage, onError, onConnect, onDisconnect])
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
+    }
+    if (healthCheckTimeoutRef.current) {
+      clearTimeout(healthCheckTimeoutRef.current)
+      healthCheckTimeoutRef.current = null
     }
     if (wsRef.current) {
       wsRef.current.close()
@@ -173,6 +233,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     sendMessage,
     connect,
     disconnect,
+    backendOnline,
   }
 }
+
 

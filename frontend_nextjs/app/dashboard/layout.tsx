@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,7 @@ import {
   X,
   LogOut,
 } from "lucide-react"
-import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Suspense } from "react"
 import { useAuthStore, useAuthHydration } from "@/lib/stores/authStore"
@@ -55,6 +55,7 @@ const navigation = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, isAuthenticated, logout, accessToken, refreshToken } = useAuthStore()
   const hasHydrated = useAuthHydration()
@@ -63,14 +64,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Initialize WebSocket connection for real-time updates (only if authenticated and tokens valid)
   const shouldConnectWebSocket = hasHydrated && isAuthenticated && areTokensValid(accessToken, refreshToken)
   
-  useWebSocket({
+  const { backendOnline } = useWebSocket({
     enabled: shouldConnectWebSocket,
     onMessage: (message) => {
-      // Messages are handled by the hook with toast notifications
       console.log("[Dashboard] WebSocket message:", message)
+      
+      // Handle different message types and invalidate relevant queries
+      switch (message.type) {
+        case "new_email":
+        case "urgent_email":
+        case "triage_complete":
+          queryClient.invalidateQueries({ queryKey: ['emails'] })
+          queryClient.invalidateQueries({ queryKey: ['emailStats'] })
+          queryClient.invalidateQueries({ queryKey: ['analytics'] })
+          break
+        case "draft_ready":
+          queryClient.invalidateQueries({ queryKey: ['drafts'] })
+          break
+        case "task_update":
+          queryClient.invalidateQueries({ queryKey: ['tasks'] })
+          break
+        case "sync_status":
+          // Show sync status toast if needed
+          if (message.data?.status === "complete") {
+            toast.success("Email sync completed")
+          }
+          break
+        default:
+          break
+      }
     },
     onError: (error) => {
-      console.error("[Dashboard] WebSocket error:", error)
+      // Only log errors if backend is supposed to be online
+      // Errors when backend is offline are expected and handled silently
+      if (backendOnline !== false) {
+        console.error("[Dashboard] WebSocket error:", error)
+      }
+    },
+    onConnect: () => {
+      console.log("[Dashboard] WebSocket connected")
+    },
+    onDisconnect: () => {
+      console.log("[Dashboard] WebSocket disconnected")
     },
   })
 
@@ -242,12 +277,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-                {/* Page content */}
-                <main className="p-6">
-                  <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-                </main>
-              </div>
-              <ApiStatusCheck />
-            </div>
-          )
-        }
+        {/* Page content */}
+        <main className="p-6">
+          <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+        </main>
+      </div>
+      <ApiStatusCheck />
+    </div>
+  )
+}

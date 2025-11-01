@@ -3,7 +3,7 @@ Generate embeddings for semantic email search
 """
 from typing import List
 from sentence_transformers import SentenceTransformer
-from .celery_app import celery_app, BaseEmailSyncTask
+from .celery_app import celery_app
 from ..db import SessionLocal
 from ..models.communication_log import CommunicationLog, CommunicationType
 from ..integrations.vector_store import VectorStore
@@ -11,6 +11,21 @@ from ..security.encryption import decrypt_data
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Import BaseEmailSyncTask from tasks module
+from ..tasks.email_sync_task import BaseEmailSyncTask
+
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
 
 # Load embedding model (cached globally)
 embedding_model = None
@@ -24,7 +39,7 @@ def get_embedding_model():
     return embedding_model
 
 
-@celery_app.task(base=BaseEmailSyncTask, bind=True)
+@celery_task(base=BaseEmailSyncTask, bind=True)
 def generate_email_embedding(self, comm_log_id: int, db: Session = None):
     """
     Generate and store embedding for an email communication.

@@ -36,8 +36,8 @@ interface Task {
 const statusColumns = [
   { id: "todo", label: "To Do", color: "from-gray-500 to-gray-600" },
   { id: "in_progress", label: "In Progress", color: "from-blue-500 to-cyan-500" },
-  { id: "review", label: "Review", color: "from-purple-500 to-pink-500" },
   { id: "done", label: "Completed", color: "from-green-500 to-teal-500" },
+  { id: "cancelled", label: "Cancelled", color: "from-gray-400 to-gray-500" },
 ]
 
 export default function TasksPage() {
@@ -166,8 +166,8 @@ export default function TasksPage() {
     total: tasks.length,
     todo: getTasksByStatus("todo").length,
     inProgress: getTasksByStatus("in_progress").length,
-    review: getTasksByStatus("review").length,
     completed: getTasksByStatus("done").length,
+    cancelled: getTasksByStatus("cancelled").length,
   }
 
   return (
@@ -302,14 +302,14 @@ export default function TasksPage() {
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stats.review}</div>
-            <p className="text-sm text-muted-foreground">Review</p>
+            <div className="text-2xl font-bold">{stats.completed}</div>
+            <p className="text-sm text-muted-foreground">Completed</p>
           </CardContent>
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-sm text-muted-foreground">Completed</p>
+            <div className="text-2xl font-bold">{stats.cancelled}</div>
+            <p className="text-sm text-muted-foreground">Cancelled</p>
           </CardContent>
         </Card>
       </div>
@@ -374,7 +374,7 @@ export default function TasksPage() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
-                              onClick={() => handleStatusChange(task.id, column.id === "done" ? "done" : "done")}
+                              onClick={() => handleStatusChange(task.id, task.status === "done" ? "todo" : "done")}
                             >
                               <CheckCircle2 className="w-3 h-3" />
                             </Button>
@@ -447,8 +447,8 @@ export default function TasksPage() {
                         <SelectContent>
                           <SelectItem value="todo">To Do</SelectItem>
                           <SelectItem value="in_progress">In Progress</SelectItem>
-                          <SelectItem value="review">Review</SelectItem>
                           <SelectItem value="done">Done</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button

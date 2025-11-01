@@ -21,9 +21,10 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     
-    # Redis
-    REDIS_URL: str
+    # Redis (Optional - required for caching and Celery)
+    REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_CACHE_TTL: int = 3600
+    REDIS_ENABLED: bool = True  # Set to False to disable Redis (app will work but caching/Celery disabled)
     
     # JWT
     JWT_SECRET_KEY: str
@@ -104,9 +105,9 @@ class Settings(BaseSettings):
     # Monitoring
     SENTRY_DSN: str = ""
     
-    # Celery
-    CELERY_BROKER_URL: str
-    CELERY_RESULT_BACKEND: str
+    # Celery (Optional - requires Redis)
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

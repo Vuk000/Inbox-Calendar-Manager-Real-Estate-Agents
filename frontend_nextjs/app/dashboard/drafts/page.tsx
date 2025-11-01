@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation"
 
 interface Draft {
   id: number
-  message_id: number
+  communication_log_id: number | null  // Changed from message_id
   subject: string
   content: string
   variant_number: number
@@ -44,12 +44,13 @@ export default function DraftsPage() {
     refetchOnWindowFocus: true,
   })
 
-  // Group drafts by message_id to show variants together
+  // Group drafts by communication_log_id to show variants together
   const groupedDrafts = drafts.reduce((acc: Record<number, Draft[]>, draft: Draft) => {
-    if (!acc[draft.message_id]) {
-      acc[draft.message_id] = []
+    const key = draft.communication_log_id || 0
+    if (!acc[key]) {
+      acc[key] = []
     }
-    acc[draft.message_id].push(draft)
+    acc[key].push(draft)
     return acc
   }, {})
 

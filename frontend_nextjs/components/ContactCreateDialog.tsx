@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -18,8 +18,8 @@ const contactSchema = z.object({
   first_name: z.string().min(1, "First name is required"),
   last_name: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone_number: z.string().optional(),
-  company_name: z.string().optional(),
+  phone: z.string().optional(),
+  company: z.string().optional(),
   job_title: z.string().optional(),
   address_line1: z.string().optional(),
   city: z.string().optional(),
@@ -37,11 +37,12 @@ interface ContactCreateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
-  initialData?: Partial<ContactFormData>
+  initialData?: Partial<ContactFormData> & { id?: number }
 }
 
 export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData }: ContactCreateDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const isEditMode = !!initialData && 'id' in initialData
 
   const {
     register,
@@ -52,35 +53,69 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
     watch,
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
-    defaultValues: initialData || {
+    defaultValues: {
       contact_type: "buyer",
       contact_status: "cold_lead",
     },
   })
 
+  // Reset form when initialData changes (for edit mode)
+  useEffect(() => {
+    if (initialData) {
+      reset({
+        ...initialData,
+        contact_type: initialData.contact_type || "buyer",
+        contact_status: initialData.contact_status || "cold_lead",
+      })
+    } else {
+      reset({
+        contact_type: "buyer",
+        contact_status: "cold_lead",
+      })
+    }
+  }, [initialData, reset])
+
+  const contactType = watch("contact_type")
   const contactStatus = watch("contact_status")
 
   const onSubmit = async (data: ContactFormData) => {
     setIsLoading(true)
     try {
-      await contactsService.createContact(data)
-      toast.success("Contact created successfully!")
+      if (isEditMode && initialData && 'id' in initialData && initialData.id !== undefined) {
+        await contactsService.updateContact(initialData.id, data)
+        toast.success("Contact updated successfully!")
+      } else {
+        await contactsService.createContact(data)
+        toast.success("Contact created successfully!")
+      }
       reset()
       onSuccess?.()
+      onOpenChange(false)
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to create contact")
+      toast.error(error.response?.data?.detail || `Failed to ${isEditMode ? 'update' : 'create'} contact`)
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleClose = () => {
+    reset()
+    onOpenChange(false)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      if (!newOpen) {
+        handleClose()
+      } else {
+        onOpenChange(newOpen)
+      }
+    }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initialData ? "Edit Contact" : "Create New Contact"}</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Contact" : "Create New Contact"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Update contact information" : "Add a new contact to your database"}
+            {isEditMode ? "Update contact information" : "Add a new contact to your database"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -92,7 +127,9 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
                 {...register("first_name")}
                 className={errors.first_name ? "border-destructive" : ""}
               />
-              {errors.first_name && <p className="text-sm text-destructive">{errors.first_name.message}</p>}
+              {errors.first_name && (
+                <p className="text-sm text-destructive">{errors.first_name.message}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="last_name">Last Name *</Label>
@@ -117,15 +154,15 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone_number">Phone Number</Label>
-              <Input id="phone_number" {...register("phone_number")} />
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input id="phone" {...register("phone")} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="company_name">Company</Label>
-              <Input id="company_name" {...register("company_name")} />
+              <Label htmlFor="company">Company</Label>
+              <Input id="company" {...register("company")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="job_title">Job Title</Label>
@@ -157,7 +194,7 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
             <div className="space-y-2">
               <Label htmlFor="contact_type">Contact Type</Label>
               <Select
-                defaultValue={watch("contact_type") || "buyer"}
+                value={contactType || "buyer"}
                 onValueChange={(value) => setValue("contact_type", value)}
               >
                 <SelectTrigger>
@@ -175,7 +212,7 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
             <div className="space-y-2">
               <Label htmlFor="contact_status">Status</Label>
               <Select
-                defaultValue={contactStatus || "cold_lead"}
+                value={contactStatus || "cold_lead"}
                 onValueChange={(value) => setValue("contact_status", value)}
               >
                 <SelectTrigger>
@@ -199,17 +236,17 @@ export function ContactCreateDialog({ open, onOpenChange, onSuccess, initialData
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
+                  {isEditMode ? "Updating..." : "Creating..."}
                 </>
               ) : (
-                "Create Contact"
+                isEditMode ? "Update Contact" : "Create Contact"
               )}
             </Button>
           </div>

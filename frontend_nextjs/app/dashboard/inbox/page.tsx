@@ -24,7 +24,7 @@ import {
   Clock,
   Loader2,
 } from "lucide-react"
-import { emailService, draftService } from "@/lib/api"
+import { emailService, communicationsService } from "@/lib/api"
 import toast from "react-hot-toast"
 import { formatDistanceToNow } from "date-fns"
 import { useRouter } from "next/navigation"
@@ -65,6 +65,16 @@ export default function InboxPage() {
       // Filter by urgency for urgent tab
       if (activeTab === 'urgent') {
         params.urgency_min = 70
+      }
+      
+      // Filter by starred for starred tab
+      if (activeTab === 'starred') {
+        params.starred = true
+      }
+      
+      // Filter out archived emails unless viewing archived
+      if (activeTab !== 'archived') {
+        params.archived = false
       }
       
       const response = await emailService.listEmails(params)
@@ -109,8 +119,54 @@ export default function InboxPage() {
     },
   })
 
+  // Star/archive/delete mutations
+  const starMutation = useMutation({
+    mutationFn: async ({ id, starred }: { id: number; starred: boolean }) => {
+      return await communicationsService.starCommunication(id, starred)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      toast.success('Email updated')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update email')
+    },
+  })
+
+  const archiveMutation = useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      return await communicationsService.archiveCommunication(id, archived)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      if (selectedEmail?.id === archiveMutation.variables?.id) {
+        setSelectedEmail(null)
+      }
+      toast.success('Email archived')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to archive email')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await communicationsService.deleteCommunication(id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      if (selectedEmail?.id === deleteMutation.variables) {
+        setSelectedEmail(null)
+      }
+      toast.success('Email deleted')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete email')
+    },
+  })
+
   // Filter emails based on tab
-  const filteredEmails = emails.filter((email: Email) => {
+  const filteredEmails = emails.filter((email: any) => {
     if (activeTab === "unread") {
       // For now, consider emails with high urgency as unread
       return (email.urgency_score || 0) > 50
@@ -119,8 +175,7 @@ export default function InboxPage() {
       return (email.urgency_score || 0) >= 70
     }
     if (activeTab === "starred") {
-      // Backend doesn't have starred field yet, skip for now
-      return true
+      return email.is_starred === true
     }
     return true
   })
@@ -341,15 +396,22 @@ export default function InboxPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Star className="w-4 h-4 mr-2" />
-                            Star
+                          <DropdownMenuItem
+                            onClick={() => emailDetails && starMutation.mutate({ id: emailDetails.id, starred: !emailDetails.is_starred })}
+                          >
+                            <Star className={`w-4 h-4 mr-2 ${emailDetails?.is_starred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                            {emailDetails?.is_starred ? 'Unstar' : 'Star'}
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => emailDetails && archiveMutation.mutate({ id: emailDetails.id, archived: !emailDetails.is_archived })}
+                          >
                             <Archive className="w-4 h-4 mr-2" />
-                            Archive
+                            {emailDetails?.is_archived ? 'Unarchive' : 'Archive'}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => emailDetails && confirm('Are you sure you want to delete this email?') && deleteMutation.mutate(emailDetails.id)}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -400,9 +462,13 @@ export default function InboxPage() {
                         <Forward className="w-4 h-4 mr-2" />
                         Forward
                       </Button>
-                      <Button variant="outline">
+                      <Button
+                        variant="outline"
+                        onClick={() => emailDetails && archiveMutation.mutate({ id: emailDetails.id, archived: !emailDetails.is_archived })}
+                        disabled={archiveMutation.isPending}
+                      >
                         <Archive className="w-4 h-4 mr-2" />
-                        Archive
+                        {emailDetails?.is_archived ? 'Unarchive' : 'Archive'}
                       </Button>
                     </div>
                   </CardContent>

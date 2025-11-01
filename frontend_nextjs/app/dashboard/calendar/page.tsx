@@ -6,16 +6,30 @@ import { ChevronLeft, ChevronRight, Plus, Clock, MapPin, Users, Video, Loader2, 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { taskService } from "@/lib/api"
+import { taskService, communicationsService } from "@/lib/api"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from "date-fns"
 import Link from "next/link"
+
+interface CalendarEvent {
+  id: string
+  title: string
+  time: string
+  date: number
+  fullDate: Date
+  type: string
+  priority: string
+  status: string
+  color: string
+  source: 'task' | 'meeting'
+  contactId?: number
+}
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"month" | "week" | "day">("month")
 
   // Fetch tasks as calendar events
-  const { data: tasks = [], isLoading, error } = useQuery({
+  const { data: tasks = [], isLoading: isLoadingTasks, error: tasksError } = useQuery({
     queryKey: ['tasks', 'calendar'],
     queryFn: async () => {
       const response = await taskService.listTasks({})
@@ -24,11 +38,31 @@ export default function CalendarPage() {
     refetchOnWindowFocus: true,
   })
 
+  // Fetch meetings from communication logs
+  const { data: meetings = [], isLoading: isLoadingMeetings } = useQuery({
+    queryKey: ['meetings', 'calendar', currentDate],
+    queryFn: async () => {
+      const monthStart = startOfMonth(currentDate)
+      const monthEnd = endOfMonth(currentDate)
+      const response = await communicationsService.listCommunications({
+        communication_type: 'meeting',
+        start_date: monthStart.toISOString(),
+        end_date: monthEnd.toISOString(),
+        limit: 100,
+      })
+      return Array.isArray(response) ? response : []
+    },
+    refetchOnWindowFocus: true,
+  })
+
+  const isLoading = isLoadingTasks || isLoadingMeetings
+  const error = tasksError
+
   // Convert tasks to calendar events
-  const events = tasks
+  const taskEvents: CalendarEvent[] = tasks
     .filter((task: any) => task.due_date)
     .map((task: any) => ({
-      id: task.id,
+      id: `task-${task.id}`,
       title: task.title,
       time: task.due_time || "All Day",
       date: new Date(task.due_date).getDate(),
@@ -37,7 +71,28 @@ export default function CalendarPage() {
       priority: task.priority,
       status: task.status,
       color: getEventColor(task.task_type, task.priority),
+      source: 'task' as const,
     }))
+
+  // Convert meetings to calendar events
+  const meetingEvents: CalendarEvent[] = meetings
+    .filter((meeting: any) => meeting.occurred_at)
+    .map((meeting: any) => ({
+      id: `meeting-${meeting.id}`,
+      title: meeting.subject || "Meeting",
+      time: format(new Date(meeting.occurred_at), "h:mm a"),
+      date: new Date(meeting.occurred_at).getDate(),
+      fullDate: new Date(meeting.occurred_at),
+      type: "meeting",
+      priority: "medium",
+      status: "scheduled",
+      color: "bg-purple-500",
+      source: 'meeting' as const,
+      contactId: meeting.contact_id,
+    }))
+
+  // Combine all events
+  const events: CalendarEvent[] = [...taskEvents, ...meetingEvents]
 
   // Get upcoming events (next 7 days)
   const upcomingEvents = events
@@ -82,7 +137,14 @@ export default function CalendarPage() {
     if (taskType === "showing") return "bg-blue-500"
     if (taskType === "closing") return "bg-green-500"
     if (taskType === "inspection") return "bg-purple-500"
+    if (taskType === "meeting") return "bg-purple-500"
     return "bg-gray-500"
+  }
+
+  const handleDayClick = (day: Date) => {
+    // Navigate to tasks page with date filter
+    const dateStr = format(day, "yyyy-MM-dd")
+    window.location.href = `/dashboard/tasks?date=${dateStr}`
   }
 
   return (
@@ -160,6 +222,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={day.toISOString()}
+                        onClick={() => handleDayClick(day)}
                         className={`aspect-square border border-border rounded-lg p-1 cursor-pointer hover:bg-accent transition-colors ${
                           isTodayDate ? "bg-primary/10 border-primary" : ""
                         }`}
@@ -169,13 +232,15 @@ export default function CalendarPage() {
                         </div>
                         <div className="space-y-0.5">
                           {dayEvents.slice(0, 3).map((event) => (
-                            <div
+                            <Link
                               key={event.id}
-                              className={`${event.color} text-white text-xs px-1 py-0.5 rounded truncate`}
+                              href={event.source === 'task' ? `/dashboard/tasks` : event.contactId ? `/dashboard/contacts/${event.contactId}` : '#'}
+                              onClick={(e) => e.stopPropagation()}
+                              className={`${event.color} text-white text-xs px-1 py-0.5 rounded truncate block hover:opacity-80 transition-opacity`}
                               title={event.title}
                             >
                               {event.title}
-                            </div>
+                            </Link>
                           ))}
                           {dayEvents.length > 3 && (
                             <div className="text-xs text-muted-foreground">+{dayEvents.length - 3} more</div>
@@ -211,7 +276,11 @@ export default function CalendarPage() {
             ) : (
               <div className="space-y-4">
                 {upcomingEvents.map((event) => (
-                  <div key={event.id} className="p-3 border border-border rounded-lg hover:bg-accent transition-colors">
+                  <Link
+                    key={event.id}
+                    href={event.source === 'task' ? `/dashboard/tasks` : event.contactId ? `/dashboard/contacts/${event.contactId}` : '#'}
+                    className="p-3 border border-border rounded-lg hover:bg-accent transition-colors block"
+                  >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <p className="font-semibold text-sm">{event.title}</p>
@@ -233,7 +302,7 @@ export default function CalendarPage() {
                     >
                       {event.type.replace("_", " ")}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
                 <Button variant="outline" className="w-full" asChild>
                   <Link href="/dashboard/tasks">View All Tasks</Link>

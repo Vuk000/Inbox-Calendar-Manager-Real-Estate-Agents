@@ -3,8 +3,8 @@
 🚀 **AI-Powered Inbox Manager for Real Estate Agents**
 
 **Status**: ✅ **READY FOR LOCAL DEVELOPMENT**  
-**Last Updated**: October 25, 2025  
-**Version**: 2.0.0 (Project Apex - CRM Focus)  
+**Last Updated**: December 2024  
+**Version**: 2.0.0 (AgentFlow - Complete Integration)  
 **Python**: 3.13.3 | **Node**: 18+ | **Database**: SQLite (dev) / PostgreSQL (prod)
 
 An enterprise-grade SaaS platform that uses AI (Claude Sonnet 4.5) to automate email management, lead qualification, response drafting, and workflow automation specifically for real estate professionals.
@@ -48,15 +48,15 @@ RealInbox AI/
 │   ├── docker-compose.yml # Local dev services (PostgreSQL, Redis)
 │   └── README.md
 │
-├── frontend/              # React + TypeScript frontend
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   ├── pages/        # Page components
-│   │   ├── services/     # API integration
-│   │   ├── stores/       # State management (Zustand)
-│   │   └── App.tsx
-│   ├── package.json
-│   └── README.md
+├── frontend_nextjs/       # Next.js 16 + TypeScript frontend
+│   ├── app/              # Next.js App Router pages
+│   │   ├── dashboard/    # Protected dashboard pages
+│   │   ├── login/         # Authentication pages
+│   │   └── layout.tsx     # Root layout
+│   ├── components/        # Reusable UI components
+│   ├── lib/              # API client & utilities
+│   ├── hooks/            # Custom React hooks
+│   └── package.json
 │
 ├── docs/                  # Documentation (to be created)
 ├── .gitignore
@@ -74,43 +74,113 @@ RealInbox AI/
 - **Background Jobs**: Celery + Redis
 - **Monitoring**: Sentry
 
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
+### Frontend (Next.js)
+- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui components
 - **State Management**: Zustand
 - **Data Fetching**: TanStack Query (React Query)
-- **Routing**: React Router v6
+- **HTTP Client**: Axios with interceptors
+- **Form Validation**: React Hook Form + Zod
+- **Real-time**: WebSocket integration
 - **Notifications**: React Hot Toast
+- **Icons**: Lucide React
 
 ## ⚡ Quick Commands
 
 ```bash
-# Start backend (from project root)
-cd backend && python -m uvicorn app.main:app --reload
+# Start everything (easiest way!)
+# Windows PowerShell: .\start_app.ps1
+# Windows CMD: start_app.bat
+# Mac/Linux: ./start_app.sh
 
-# Start frontend (new terminal)
-cd frontend && npm run dev
+# Or from frontend directory:
+cd frontend_nextjs
+npm run dev:all  # Starts both backend and frontend
+
+# Start individually:
+cd backend && venv\Scripts\activate && python -m uvicorn app.main:app --reload  # Backend only
+cd frontend_nextjs && npm run dev  # Frontend only
 
 # Run tests
-cd backend && pytest
-cd frontend && npm test
+cd backend && venv\Scripts\activate && pytest
+cd frontend_nextjs && npm test
 
 # Database migrations
-cd backend && alembic upgrade head
+cd backend && venv\Scripts\activate && alembic upgrade head
+
+# Verify environment
+.\setup_dev_env.ps1
 ```
 
-**URLs**: Backend: http://localhost:8000 | Frontend: http://localhost:5173 | API Docs: http://localhost:8000/api/v1/docs
+**URLs**: Backend: http://localhost:8000 | Frontend: http://localhost:3000 | API Docs: http://localhost:8000/api/v1/docs | Health Check: http://localhost:8000/health
 
 ---
 
 ## 🚀 Quick Start
+
+### Option 1: One-Click Startup (Recommended!)
+
+**Windows PowerShell:**
+```powershell
+.\start_app.ps1
+```
+Or if you prefer the batch file: `.\start_app.bat`
+
+**Windows Command Prompt:**
+```cmd
+start_app.bat
+```
+
+**Important:** In PowerShell, you must use `.\` prefix (e.g., `.\start_app.ps1` or `.\start_app.bat`). This is a PowerShell security feature. In Command Prompt, you can run `start_app.bat` directly.
+
+**Mac/Linux:**
+```bash
+chmod +x start_app.sh
+./start_app.sh
+```
+
+These scripts automatically:
+- ✅ Check and create virtual environments if needed
+- ✅ Install dependencies if missing
+- ✅ Start backend in a separate window
+- ✅ Start frontend in current window
+
+### Option 2: VS Code Tasks (Recommended for VS Code Users)
+
+1. Open VS Code in project root
+2. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+3. Type "Tasks: Run Task"
+4. Select "Start Both Servers"
+
+Or press `F5` and select "Full Stack: Backend + Frontend" for debugging
+
+### Option 3: npm Script
+
+```bash
+cd frontend_nextjs
+npm run dev:all
+```
+
+### VS Code Setup
+
+VS Code is pre-configured to:
+- ✅ Ignore root `.venv` (prevents auto-activation)
+- ✅ Use `backend/venv` automatically
+- ✅ Set correct Python interpreter
+
+**If you see "No module named uvicorn":**
+1. Press `Ctrl+Shift+P` → "Python: Select Interpreter"
+2. Choose: `.\backend\venv\Scripts\python.exe`
+3. Or use startup scripts: `.\start_app.ps1` (they use correct venv)
+
+See [`START_HERE.md`](START_HERE.md) for detailed VS Code setup instructions.
 
 ### Prerequisites
 
 - **Python 3.11 - 3.13** (3.13.3 currently in use)
 - **Node.js 18+** and npm
 - **Git**
+- **VS Code** (recommended) with Python extension
 
 Optional but recommended:
 - **PostgreSQL 15+** (SQLite used by default for dev)
@@ -151,24 +221,25 @@ python -m uvicorn app.main:app --reload
 ### 3. Frontend Setup
 
 ```bash
-cd frontend
+cd frontend_nextjs
 
 # Install dependencies
 npm install
 
 # Create environment file (if not exists)
-echo VITE_API_URL=http://localhost:8000/api/v1 > .env
+echo NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 > .env.local
+echo NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws >> .env.local
 
 # Start development server
 npm run dev
 ```
 
-**Frontend runs at**: http://localhost:5173
+**Frontend runs at**: http://localhost:3000
 
 ### 4. Create Test User & Login
 
 **Option 1 - Via Frontend**:
-1. Open http://localhost:5173
+1. Open http://localhost:3000
 2. Click "Sign up for free"
 3. Create account and login
 
@@ -195,8 +266,8 @@ npm run dev
 - **[ENV_TEMPLATE.md](backend/ENV_TEMPLATE.md)** - Environment variable reference
 - **[Backend README](backend/README.md)** - Backend-specific documentation
 
-**Frontend**:
-- **[Frontend README](frontend/README.md)** - Frontend-specific documentation
+**Frontend**: 
+- **[Frontend README](frontend_nextjs/README.md)** - Next.js frontend documentation
 
 ## 🔑 Configuration
 
@@ -293,28 +364,26 @@ See `backend/.env.example` for complete configuration options.
 - [x] Twilio Integration (SMS/WhatsApp)
 - [x] Vector Store (Pinecone for semantic search)
 
-### 🚧 Phase 4: Email Management (In Progress)
-- [ ] Email sync workers
-- [ ] Real-time triage pipeline
-- [ ] Inbox UI with filters
-- [ ] Semantic search interface
-- [ ] Thread grouping
+### ✅ Phase 4: Email Management (Completed)
+- [x] Email sync workers (backend ready)
+- [x] Real-time triage pipeline (backend ready)
+- [x] Inbox UI with filters (fully integrated)
+- [x] Email actions (star, archive, delete)
+- [x] AI draft generation (integrated)
 
-### 🚧 Phase 5: Drafts & Automation (In Progress)
-- [ ] Draft generation UI
-- [ ] Voice style training
-- [ ] Multi-variant drafts
-- [ ] Approval workflow
-- [ ] Automated follow-up sequences
+### ✅ Phase 5: Drafts & Automation (Completed)
+- [x] Draft generation UI (fully integrated)
+- [x] Draft editing and management
+- [x] Multi-variant drafts support
+- [x] Draft deletion
 
-### 🚧 Phase 6: Additional Features (Planned)
-- [ ] Task and calendar automation
-- [ ] Property dashboard
-- [ ] Document intelligence (PDF processing)
-- [ ] Analytics and insights
-- [ ] Team collaboration
-- [ ] Mobile app (PWA)
-- [ ] Voice interface
+### ✅ Phase 6: Additional Features (Completed)
+- [x] Task and calendar automation (fully integrated)
+- [x] Property dashboard (fully integrated)
+- [x] Analytics and insights (fully integrated)
+- [x] Real-time WebSocket updates
+- [x] Contact management with timeline
+- [x] Settings and profile management
 
 ## 🧪 Testing
 
@@ -347,13 +416,16 @@ docker build -t realinbox-api ./backend
 ### Frontend (Vercel/Netlify)
 
 ```bash
-cd frontend
+cd frontend_nextjs
 npm run build
 
-# Deploy dist/ folder to Vercel/Netlify
+# Deploy to Vercel (recommended for Next.js)
+vercel deploy
+
+# Or deploy .next/ folder to any Node.js hosting
 ```
 
-See individual README files in `backend/` and `frontend/` for detailed deployment instructions.
+See individual README files in `backend/` and `frontend_nextjs/` for detailed deployment instructions.
 
 ## 📊 Business Model
 

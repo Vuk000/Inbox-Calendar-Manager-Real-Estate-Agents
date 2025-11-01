@@ -5,6 +5,9 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "dev:all": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd ../backend && if exist venv\\Scripts\\activate.bat (call venv\\Scripts\\activate.bat && python -m uvicorn app.main:app --reload) else (echo ERROR: Backend venv not found! Please run: cd backend && python -m venv venv && venv\\Scripts\\activate && pip install -r requirements.txt && pause)",
+    "dev:frontend": "next dev",
     "lint": "eslint .",
     "start": "next start",
     "setup": "node create-env.js"
@@ -70,6 +73,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",

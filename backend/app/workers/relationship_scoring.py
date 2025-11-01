@@ -3,7 +3,6 @@ Relationship scoring background workers using Celery
 Handles periodic calculation of contact relationship scores
 """
 from typing import Dict, Any
-from celery import Task
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
@@ -15,6 +14,14 @@ from ..services.relationship_service import RelationshipService
 from ..security.audit import log_action
 
 logger = logging.getLogger(__name__)
+
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
 
 
 class BaseRelationshipTask(Task):
@@ -28,7 +35,20 @@ class BaseRelationshipTask(Task):
             db.close()
 
 
-@celery_app.task(base=BaseRelationshipTask, bind=True)
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(base=BaseRelationshipTask, bind=True)
 def update_contact_relationship_score(self, contact_id: int, user_id: int, db: Session = None):
     """
     Update relationship score for a single contact
@@ -74,7 +94,7 @@ def update_contact_relationship_score(self, contact_id: int, user_id: int, db: S
         }
 
 
-@celery_app.task(base=BaseRelationshipTask, bind=True)
+@celery_task(base=BaseRelationshipTask, bind=True)
 def bulk_update_relationship_scores(self, user_id: int, limit: int = 50, db: Session = None):
     """
     Update relationship scores for multiple contacts (batch job)
@@ -119,7 +139,7 @@ def bulk_update_relationship_scores(self, user_id: int, limit: int = 50, db: Ses
         }
 
 
-@celery_app.task(base=BaseRelationshipTask)
+@celery_task(base=BaseRelationshipTask)
 def update_all_active_contacts(db: Session = None):
     """
     Update relationship scores for all users' active contacts (periodic task)
@@ -154,7 +174,7 @@ def update_all_active_contacts(db: Session = None):
         }
 
 
-@celery_app.task(base=BaseRelationshipTask)
+@celery_task(base=BaseRelationshipTask)
 def update_scores_for_recent_communications(db: Session = None):
     """
     Update relationship scores for contacts with recent communications

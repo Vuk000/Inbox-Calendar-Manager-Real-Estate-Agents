@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const { user } = useAuthStore()
   
   // Fetch dashboard data with React Query
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading, error: dashboardError } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
       try {
@@ -67,7 +67,11 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error('Error loading dashboard:', error)
-        toast.error('Failed to load dashboard data')
+        // Don't show toast for network errors - ApiStatusCheck handles that
+        const isNetworkError = !(error as any)?.response
+        if (!isNetworkError) {
+          toast.error('Failed to load dashboard data')
+        }
         return {
           stats: {
             activeContacts: 0,
@@ -83,6 +87,14 @@ export default function DashboardPage() {
       }
     },
     refetchOnWindowFocus: true,
+    retry: (failureCount, error: any) => {
+      // Don't retry on network errors (backend offline)
+      if (!error?.response) {
+        return false
+      }
+      // Retry up to 1 time for other errors
+      return failureCount < 1
+    },
   })
 
   const stats = dashboardData?.stats || {

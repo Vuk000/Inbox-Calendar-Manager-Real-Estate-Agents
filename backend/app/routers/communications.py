@@ -30,6 +30,9 @@ class CommunicationResponse(BaseModel):
     sentiment_score: Optional[float]
     urgency_score: Optional[float]
     occurred_at: datetime
+    is_starred: bool = False
+    is_archived: bool = False
+    is_deleted: bool = False
     
     class Config:
         from_attributes = True
@@ -52,12 +55,81 @@ class LinkMessageRequest(BaseModel):
 
 
 # Endpoints
+@router.patch("/{communication_id}/star", response_model=CommunicationResponse)
+async def star_communication(
+    communication_id: int,
+    starred: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Star or unstar a communication"""
+    comm = db.query(CommunicationLog).filter(
+        CommunicationLog.id == communication_id,
+        CommunicationLog.user_id == current_user.id
+    ).first()
+    
+    if not comm:
+        raise HTTPException(status_code=404, detail="Communication not found")
+    
+    comm.is_starred = starred
+    db.commit()
+    db.refresh(comm)
+    
+    return comm
+
+
+@router.patch("/{communication_id}/archive", response_model=CommunicationResponse)
+async def archive_communication(
+    communication_id: int,
+    archived: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Archive or unarchive a communication"""
+    comm = db.query(CommunicationLog).filter(
+        CommunicationLog.id == communication_id,
+        CommunicationLog.user_id == current_user.id
+    ).first()
+    
+    if not comm:
+        raise HTTPException(status_code=404, detail="Communication not found")
+    
+    comm.is_archived = archived
+    db.commit()
+    db.refresh(comm)
+    
+    return comm
+
+
+@router.delete("/{communication_id}")
+async def delete_communication(
+    communication_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a communication (soft delete)"""
+    comm = db.query(CommunicationLog).filter(
+        CommunicationLog.id == communication_id,
+        CommunicationLog.user_id == current_user.id
+    ).first()
+    
+    if not comm:
+        raise HTTPException(status_code=404, detail="Communication not found")
+    
+    comm.is_deleted = True
+    db.commit()
+    
+    return {"success": True, "message": "Communication deleted"}
+
+
 @router.get("", response_model=List[CommunicationResponse])
 async def list_communications(
     contact_id: Optional[int] = Query(None),
     communication_type: Optional[str] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
+    starred: Optional[bool] = Query(None),
+    archived: Optional[bool] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -66,7 +138,8 @@ async def list_communications(
     if not contact_id:
         # Get all communications for user
         query = db.query(CommunicationLog).filter(
-            CommunicationLog.user_id == current_user.id
+            CommunicationLog.user_id == current_user.id,
+            CommunicationLog.is_deleted == False
         )
         
         if communication_type:
@@ -82,6 +155,12 @@ async def list_communications(
         
         if end_date:
             query = query.filter(CommunicationLog.occurred_at <= end_date)
+        
+        if starred is not None:
+            query = query.filter(CommunicationLog.is_starred == starred)
+        
+        if archived is not None:
+            query = query.filter(CommunicationLog.is_archived == archived)
         
         communications = query.order_by(
             CommunicationLog.occurred_at.desc()
@@ -128,22 +207,18 @@ async def summarize_email_thread(
     db: Session = Depends(get_db)
 ):
     """Summarize an email thread using AI"""
-    # Get messages
-    messages = db.query(Message).filter(
-        Message.id.in_(request.message_ids)
-    ).order_by(Message.received_at.asc()).all()
+    # Get communication logs
+    comm_logs = db.query(CommunicationLog).filter(
+        CommunicationLog.id.in_(request.message_ids),
+        CommunicationLog.user_id == current_user.id
+    ).order_by(CommunicationLog.occurred_at.asc()).all()
     
-    if not messages:
-        raise HTTPException(status_code=404, detail="No messages found")
-    
-    # Verify user has access to these messages
-    for msg in messages:
-        if msg.email_account.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied to one or more messages")
+    if not comm_logs:
+        raise HTTPException(status_code=404, detail="No communications found")
     
     try:
         # Build thread summary request
-        thread_text = _build_thread_text(messages)
+        thread_text = _build_thread_text(comm_logs)
         
         # Call Claude API
         client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
@@ -173,7 +248,7 @@ Provide your analysis in this JSON format:
         
         # Parse response
         content = response.content[0].text
-        result = _parse_summary_response(content, messages)
+        result = _parse_summary_response(content, comm_logs)
         
         return result
         
@@ -182,17 +257,17 @@ Provide your analysis in this JSON format:
 
 
 def _build_thread_text(messages: List[CommunicationLog]) -> str:
-    """Build readable thread text from messages"""
+    """Build readable thread text from communication logs"""
     thread_parts = []
     
     for msg in messages:
         thread_parts.append(f"""
 ---
-From: {msg.sender_name} <{msg.sender_email}>
-Date: {msg.received_at.strftime('%Y-%m-%d %H:%M')}
-Subject: {msg.subject}
+From: {msg.from_address or 'Unknown'}
+Date: {msg.occurred_at.strftime('%Y-%m-%d %H:%M')}
+Subject: {msg.subject or '(No subject)'}
 
-{msg.body_preview or '(No preview available)'}
+{msg.body or msg.summary or '(No preview available)'}
 ---
 """)
     
@@ -215,9 +290,10 @@ def _parse_summary_response(content: str, messages: List[CommunicationLog]) -> d
             # Get unique participants
             participants = set()
             for msg in messages:
-                participants.add(msg.sender_email)
-                if msg.recipient_emails:
-                    participants.update(msg.recipient_emails)
+                if msg.from_address:
+                    participants.add(msg.from_address)
+                if msg.to_address:
+                    participants.add(msg.to_address)
             
             return {
                 "summary": result.get("summary", "Summary unavailable"),

@@ -69,8 +69,10 @@ export default function LoginPage() {
       })
       
       // Better error messages
-      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
-        toast.error("Cannot connect to server. Please check if the backend is running.")
+      if (!error.response || error.code === 'ECONNABORTED' || error.message === 'Network Error' || error.code === 'ECONNREFUSED') {
+        toast.error("Backend server is not running. Start it first:\n1. Open terminal in 'backend' folder\n2. Run: python -m uvicorn app.main:app --reload", {
+          duration: 8000,
+        })
       } else if (error.response?.status === 401) {
         toast.error("Invalid email or password. Please try again.")
       } else if (error.response?.data?.detail) {

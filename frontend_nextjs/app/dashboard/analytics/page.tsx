@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { TrendingUp, TrendingDown, DollarSign, Home, Users, Mail, Loader2, AlertCircle } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, Home, Users, Mail, Loader2, AlertCircle, Zap } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { analyticsService } from "@/lib/api"
 import { format } from "date-fns"
@@ -14,52 +14,54 @@ export default function AnalyticsPage() {
       try {
         return await analyticsService.getDashboard()
       } catch (error) {
-        // Return mock data structure if API fails
+        console.error('Analytics fetch error:', error)
+        // Return default structure if API fails
         return {
-          total_revenue: 0,
-          active_listings: 0,
-          new_leads: 0,
-          email_response_rate: 0,
-          revenue_trend: 0,
-          listings_trend: 0,
-          leads_trend: 0,
-          response_rate_trend: 0,
+          emails_processed_today: 0,
+          time_saved_hours: 0,
+          drafts_generated: 0,
+          tasks_completed: 0,
+          urgent_emails: 0,
+          recent_leads: 0,
+          ai_actions_used: 0,
+          ai_actions_limit: 0,
         }
       }
     },
     refetchOnWindowFocus: true,
   })
 
+  // Calculate stats from backend response
   const stats = [
     {
-      label: "Total Revenue",
-      value: analyticsData?.total_revenue
-        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(analyticsData.total_revenue)
-        : "$0",
-      change: analyticsData?.revenue_trend ? `${analyticsData.revenue_trend > 0 ? '+' : ''}${analyticsData.revenue_trend.toFixed(1)}%` : "+0%",
-      trend: analyticsData?.revenue_trend && analyticsData.revenue_trend > 0 ? "up" : "down",
-      icon: DollarSign,
-    },
-    {
-      label: "Active Listings",
-      value: analyticsData?.active_listings?.toString() || "0",
-      change: analyticsData?.listings_trend ? `${analyticsData.listings_trend > 0 ? '+' : ''}${analyticsData.listings_trend}` : "+0",
-      trend: analyticsData?.listings_trend && analyticsData.listings_trend > 0 ? "up" : "down",
-      icon: Home,
-    },
-    {
-      label: "New Leads",
-      value: analyticsData?.new_leads?.toString() || "0",
-      change: analyticsData?.leads_trend ? `${analyticsData.leads_trend > 0 ? '+' : ''}${analyticsData.leads_trend.toFixed(1)}%` : "+0%",
-      trend: analyticsData?.leads_trend && analyticsData.leads_trend > 0 ? "up" : "down",
-      icon: Users,
-    },
-    {
-      label: "Email Response Rate",
-      value: analyticsData?.email_response_rate ? `${analyticsData.email_response_rate.toFixed(0)}%` : "0%",
-      change: analyticsData?.response_rate_trend ? `${analyticsData.response_rate_trend > 0 ? '+' : ''}${analyticsData.response_rate_trend.toFixed(1)}%` : "+0%",
-      trend: analyticsData?.response_rate_trend && analyticsData.response_rate_trend > 0 ? "up" : "down",
+      label: "Emails Processed Today",
+      value: analyticsData?.emails_processed_today?.toString() || "0",
+      change: "+0",
+      trend: "up" as const,
       icon: Mail,
+    },
+    {
+      label: "Time Saved",
+      value: analyticsData?.time_saved_hours 
+        ? `${analyticsData.time_saved_hours.toFixed(1)}h`
+        : "0h",
+      change: "+0h",
+      trend: "up" as const,
+      icon: Zap,
+    },
+    {
+      label: "Drafts Generated",
+      value: analyticsData?.drafts_generated?.toString() || "0",
+      change: "+0",
+      trend: "up" as const,
+      icon: Mail,
+    },
+    {
+      label: "Tasks Completed",
+      value: analyticsData?.tasks_completed?.toString() || "0",
+      change: "+0",
+      trend: "up" as const,
+      icon: Users,
     },
   ]
 
@@ -131,23 +133,30 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Revenue Chart Placeholder */}
+            {/* Email Activity Chart */}
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>Revenue Overview</CardTitle>
+                <CardTitle>Email Activity</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center">
-                  <div className="text-center">
-                    <TrendingUp className="w-12 h-12 text-primary mx-auto mb-2" />
-                    <p className="text-muted-foreground">Chart visualization coming soon</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {analyticsData?.total_revenue
-                        ? `Total: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(analyticsData.total_revenue)}`
-                        : ''}
-                    </p>
+                {analyticsData?.email_activity && analyticsData.email_activity.length > 0 ? (
+                  <div className="h-64 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center">
+                    <div className="text-center">
+                      <TrendingUp className="w-12 h-12 text-primary mx-auto mb-2" />
+                      <p className="text-muted-foreground">
+                        {analyticsData.email_activity.reduce((sum: number, day: any) => sum + (day.emails || 0), 0)} emails processed
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Last 14 days</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="h-64 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center">
+                    <div className="text-center">
+                      <TrendingUp className="w-12 h-12 text-primary mx-auto mb-2" />
+                      <p className="text-muted-foreground">Chart visualization coming soon</p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -157,24 +166,45 @@ export default function AnalyticsPage() {
                 <CardTitle>Lead Sources</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {leadSources.map((source) => (
-                    <div key={source.source}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{source.source}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {source.leads} leads ({source.percentage}%)
-                        </span>
+                {analyticsData?.lead_funnel && analyticsData.lead_funnel.length > 0 ? (
+                  <div className="space-y-4">
+                    {analyticsData.lead_funnel.map((stage: any) => (
+                      <div key={stage.stage}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{stage.stage}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {stage.count} leads
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min((stage.count / Math.max(...analyticsData.lead_funnel.map((s: any) => s.count))) * 100, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`${source.color} h-2 rounded-full transition-all duration-500`}
-                          style={{ width: `${source.percentage}%` }}
-                        />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {leadSources.map((source) => (
+                      <div key={source.source}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{source.source}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {source.leads} leads ({source.percentage}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className={`${source.color} h-2 rounded-full transition-all duration-500`}
+                            style={{ width: `${source.percentage}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -192,8 +222,14 @@ export default function AnalyticsPage() {
                     <p className="font-semibold">{format(new Date(), "MMM d, yyyy 'at' h:mm a")}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Data Period</p>
-                    <p className="font-semibold">Last 30 Days</p>
+                    <p className="text-muted-foreground">AI Actions Used</p>
+                    <p className="font-semibold">
+                      {analyticsData?.ai_actions_used || 0} / {analyticsData?.ai_actions_limit || 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Urgent Emails</p>
+                    <p className="font-semibold">{analyticsData?.urgent_emails?.length || 0}</p>
                   </div>
                 </div>
                 {analyticsData && (
