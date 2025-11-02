@@ -4,7 +4,7 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.2  # Compatible with passlib 1.7.4 (5.0.0 has compatibility issues)
+bcrypt==3.2.2  # Compatible with passlib 1.7.4 (4.0+ removed __about__ attribute)
 pydantic==2.11.4
 pydantic-settings==2.6.1
 
