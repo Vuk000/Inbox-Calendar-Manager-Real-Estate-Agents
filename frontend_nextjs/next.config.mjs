@@ -1,11 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'maps.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.zillowstatic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.zillow.com',
+      },
+    ],
   },
-}
+  experimental: {
+    optimizePackageImports: ['three', '@react-three/fiber', '@react-three/drei'],
+  },
+};
 
-export default nextConfig
+export default nextConfig;
+

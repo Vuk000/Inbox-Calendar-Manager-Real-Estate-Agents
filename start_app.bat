@@ -1,9 +1,9 @@
 @echo off
-REM Start Both Servers Script for Windows
-REM This script starts both the backend and frontend servers
+REM Start Backend Server Script for Windows
+REM This script starts the backend server
 
 echo ========================================
-echo Starting AgentFlow - Backend + Frontend
+echo Starting AgentFlow - Backend
 echo ========================================
 echo.
 
@@ -31,36 +31,25 @@ if not exist "backend\venv\Scripts\activate.bat" (
     echo.
 )
 
-REM Check if frontend node_modules exists
-if not exist "frontend_nextjs\node_modules" (
-    echo Frontend dependencies not found!
-    echo Installing frontend dependencies...
-    cd frontend_nextjs
-    call npm install
-    cd ..
-    echo.
-)
-
-echo Starting both servers...
+echo Starting backend server...
 echo.
 echo Backend will run on: http://localhost:8000
-echo Frontend will run on: http://localhost:3000
 echo.
-echo Press CTRL+C to stop both servers
+echo Press CTRL+C to stop the server
 echo ========================================
 echo.
 
-REM Start backend in a new window
-start "AgentFlow Backend" cmd /k "cd /d %~dp0backend && if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload) else (python -m venv venv && call venv\Scripts\activate.bat && pip install -r requirements.txt && python -m uvicorn app.main:app --reload)"
-
-REM Wait a moment for backend to start
-timeout /t 3 /nobreak >nul
-
-REM Start frontend in current window
-cd frontend_nextjs
-echo.
-echo Frontend starting on http://localhost:3000
-echo Backend is running in a separate window
-echo.
-call npm run dev
+REM Start backend
+cd backend
+if exist venv\Scripts\activate.bat (
+    call venv\Scripts\activate.bat
+    python -m uvicorn app.main:app --reload
+) else (
+    echo Virtual environment not found. Creating...
+    python -m venv venv
+    call venv\Scripts\activate.bat
+    pip install -r requirements.txt
+    python -m uvicorn app.main:app --reload
+)
+cd ..
 

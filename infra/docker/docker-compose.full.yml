@@ -39,23 +39,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Frontend React App
-  frontend:
-    build:
-      context: ../../frontend
-      dockerfile: ../../infra/docker/Dockerfile.frontend
-    container_name: realinbox_frontend
-    ports:
-      - "3000:80"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-    depends_on:
-      - backend
-    networks:
-      - realinbox_network
-    restart: unless-stopped
-
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
@@ -201,7 +184,6 @@ networks:
 
 # Access:
 # - Backend API: http://localhost:8000
-# - Frontend: http://localhost:3000
 # - API Docs: http://localhost:8000/api/v1/docs
 # - Prometheus: http://localhost:9090
 # - Grafana: http://localhost:3001

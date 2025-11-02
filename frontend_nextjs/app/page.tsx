@@ -1,801 +1,757 @@
-"use client"
-import Link from "next/link"
-import type React from "react"
+'use client';
 
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import {
-  ArrowRight,
-  Mail,
-  Calendar,
-  Users,
-  Sparkles,
-  Shield,
-  Zap,
-  CheckCircle2,
-  Building2,
-  Phone,
-  Clock,
-  Target,
-  MessageSquare,
-  BarChart3,
-} from "lucide-react"
-import { useState, useEffect, useRef } from "react"
-
-function useScrollAnimation() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [isVisible, setIsVisible] = useState(false)
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true)
-        }
-      },
-      { threshold: 0.1, rootMargin: "50px" },
-    )
-
-    if (ref.current) {
-      observer.observe(ref.current)
-    }
-
-    return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current)
-      }
-    }
-  }, [])
-
-  return { ref, isVisible }
-}
-
-function useStaggeredAnimation(itemCount: number) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visibleItems, setVisibleItems] = useState<boolean[]>(new Array(itemCount).fill(false))
-  const hasTriggered = useRef(false)
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasTriggered.current) {
-          hasTriggered.current = true
-          for (let index = 0; index < itemCount; index++) {
-            setTimeout(() => {
-              setVisibleItems((prev) => {
-                const newState = [...prev]
-                newState[index] = true
-                return newState
-              })
-            }, index * 120)
-          }
-        }
-      },
-      { threshold: 0.1, rootMargin: "50px" },
-    )
-
-    if (ref.current) {
-      observer.observe(ref.current)
-    }
-
-    return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current)
-      }
-    }
-  }, [itemCount])
-
-  return { ref, visibleItems }
-}
-
-function useMousePosition() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
-    window.addEventListener("mousemove", handleMouseMove)
-    return () => window.removeEventListener("mousemove", handleMouseMove)
-  }, [])
-
-  return mousePosition
-}
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { 
+  Mail, Calendar, BarChart3, Shield, Zap, Users, CheckCircle2, 
+  Camera, MapPin, FileText, CheckSquare, User, Building2, Sparkles,
+  MessageSquare, Clock, TrendingUp, Eye, Brain, Workflow, Lock,
+  ArrowRight, Play, Star, Award, Target, Rocket
+} from 'lucide-react';
+import Link from 'next/link';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { TextReveal } from '@/components/TextReveal';
+import { useRef } from 'react';
 
 export default function LandingPage() {
-  const [scrollY, setScrollY] = useState(0)
-  const mousePosition = useMousePosition()
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll();
 
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY)
-    window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
-
-  return (
-    <div className="min-h-screen overflow-x-hidden">
-      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
-        <div className="glass-card rounded-3xl px-8 py-4 shadow-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <Building2 className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-black text-foreground">AgentFlow</span>
-            </div>
-            <div className="hidden md:flex items-center gap-10">
-              <Link
-                href="#features"
-                className="text-sm font-bold text-foreground/70 hover:text-primary transition-colors"
-              >
-                Features
-              </Link>
-              <Link
-                href="#pricing"
-                className="text-sm font-bold text-foreground/70 hover:text-primary transition-colors"
-              >
-                Pricing
-              </Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link href="/login">
-                <Button variant="ghost" size="sm" className="font-bold">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg px-6">
-                  Get Started
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <HeroSection scrollY={scrollY} mousePosition={mousePosition} />
-
-      <DashboardPreview />
-
-      <FeaturesSection />
-
-      <StatsSection />
-
-      <PricingSection />
-
-      <CTASection />
-
-      <Footer />
-    </div>
-  )
-}
-
-function HeroSection({ scrollY, mousePosition }: { scrollY: number; mousePosition: { x: number; y: number } }) {
-  const heroTextRef = useRef<HTMLHeadingElement>(null)
-  const [textOffset, setTextOffset] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    if (!heroTextRef.current) return
-
-    const centerX = window.innerWidth / 2
-    const centerY = window.innerHeight / 2
-
-    const offsetX = (mousePosition.x - centerX) / 50
-    const offsetY = (mousePosition.y - centerY) / 50
-
-    setTextOffset((prev) => ({
-      x: prev.x + (offsetX - prev.x) * 0.1,
-      y: prev.y + (offsetY - prev.y) * 0.1,
-    }))
-  }, [mousePosition])
-
-  return (
-    <section className="min-h-screen relative overflow-hidden flex items-center justify-center pt-32 pb-20 px-6">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute top-[10%] left-[5%] w-[600px] h-[600px] rounded-full blur-3xl opacity-40"
-          style={{
-            background: "radial-gradient(circle, rgba(0, 102, 255, 0.6), transparent 70%)",
-            transform: `translate(${mousePosition.x * 0.02}px, ${mousePosition.y * 0.02 + scrollY * 0.3}px)`,
-          }}
-        />
-        <div
-          className="absolute top-[30%] right-[5%] w-[700px] h-[700px] rounded-full blur-3xl opacity-40"
-          style={{
-            background: "radial-gradient(circle, rgba(0, 212, 255, 0.5), transparent 70%)",
-            transform: `translate(${-mousePosition.x * 0.03}px, ${-mousePosition.y * 0.03 + scrollY * 0.5}px)`,
-          }}
-        />
-        <div
-          className="absolute bottom-[10%] left-[20%] w-[500px] h-[500px] rounded-full blur-3xl opacity-30"
-          style={{
-            background: "radial-gradient(circle, rgba(255, 107, 107, 0.5), transparent 70%)",
-            transform: `translate(${mousePosition.x * 0.015}px, ${mousePosition.y * 0.015 + scrollY * 0.4}px)`,
-          }}
-        />
-      </div>
-
-      <div className="container mx-auto max-w-7xl relative z-10">
-        <div className="text-center space-y-12">
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full glass-card text-sm font-bold shadow-xl animate-fade-in-up">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-            </span>
-            <span className="text-foreground">Trusted by 500+ top-producing agents</span>
-          </div>
-
-          <h1
-            ref={heroTextRef}
-            className="text-7xl sm:text-8xl md:text-9xl lg:text-[11rem] font-black text-balance leading-[0.85] tracking-tighter animate-fade-in-up text-white"
-            style={{
-              animationDelay: "0.1s",
-              opacity: 0,
-              animationFillMode: "forwards",
-              transform: `translate(${textOffset.x}px, ${textOffset.y}px)`,
-              transition: "transform 0.3s ease-out",
-              textShadow: "0 4px 20px rgba(0, 0, 0, 0.3), 0 0 40px rgba(0, 102, 255, 0.4)",
-            }}
-          >
-            Your Command
-            <br />
-            Center for
-            <br />
-            Real Estate
-          </h1>
-
-          <p
-            className="text-2xl md:text-3xl text-white/90 max-w-4xl mx-auto text-balance leading-relaxed font-semibold animate-fade-in-up"
-            style={{ animationDelay: "0.2s", opacity: 0, animationFillMode: "forwards" }}
-          >
-            Transform chaos into calm with intelligent automation, unified communications, and AI-powered insights
-          </p>
-
-          <div
-            className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-12 animate-fade-in-up"
-            style={{ animationDelay: "0.3s", opacity: 0, animationFillMode: "forwards" }}
-          >
-            <Link href="/signup">
-              <Button
-                size="lg"
-                className="bg-gradient-to-r from-primary to-secondary hover:shadow-2xl hover:scale-105 text-white text-xl px-16 h-20 font-black shadow-2xl rounded-2xl transition-all duration-300"
-              >
-                Start Free Trial
-                <ArrowRight className="ml-4 w-7 h-7" />
-              </Button>
-            </Link>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-xl px-16 h-20 font-black glass-card border-2 hover:border-primary bg-transparent rounded-2xl hover:scale-105 transition-all duration-300"
-            >
-              Watch Demo
-            </Button>
-          </div>
-
-          <div
-            className="flex items-center justify-center gap-12 pt-12 text-base font-bold text-foreground/60 animate-fade-in-up"
-            style={{ animationDelay: "0.4s", opacity: 0, animationFillMode: "forwards" }}
-          >
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-primary" />
-              No credit card
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-primary" />
-              14-day trial
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-primary" />
-              Cancel anytime
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function DashboardPreview() {
-  const { ref, isVisible } = useScrollAnimation()
-  const cardRef = useRef<HTMLDivElement>(null)
-
-  return (
-    <section ref={ref} className="py-32 px-6 relative main-bg">
-      <div className="container mx-auto max-w-7xl">
-        <div className="text-center space-y-8 mb-20">
-          <h2
-            className={`text-6xl md:text-7xl font-black text-balance leading-tight text-foreground transition-all duration-1000 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-            }`}
-          >
-            See your entire business at a glance
-          </h2>
-          <p
-            className={`text-2xl text-foreground/70 max-w-3xl mx-auto font-semibold transition-all duration-1000 delay-100 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-            }`}
-          >
-            Beautiful, data-rich interface designed for clarity and speed
-          </p>
-        </div>
-
-        <div
-          ref={cardRef}
-          className={`max-w-6xl mx-auto transition-all duration-1000 delay-200 ${
-            isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
-        >
-          <Card className="glass-card p-12 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-10">
-                <h3 className="text-4xl font-black text-foreground">Unified Timeline</h3>
-                <div className="flex items-center gap-3 text-base font-bold text-primary">
-                  <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-                  Live Updates
-                </div>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                {[
-                  {
-                    icon: Mail,
-                    name: "Sarah Johnson",
-                    time: "2m ago",
-                    message: "Interested in viewing the luxury condo this weekend",
-                    type: "Email",
-                    color: "from-blue-500 to-cyan-500",
-                  },
-                  {
-                    icon: Phone,
-                    name: "Mike Chen",
-                    time: "15m ago",
-                    message: "Called about the downtown listing",
-                    type: "Call",
-                    color: "from-purple-500 to-pink-500",
-                  },
-                  {
-                    icon: Calendar,
-                    name: "Emma Davis",
-                    time: "1h ago",
-                    message: "Confirmed showing appointment for tomorrow",
-                    type: "Meeting",
-                    color: "from-orange-500 to-red-500",
-                  },
-                  {
-                    icon: MessageSquare,
-                    name: "John Smith",
-                    time: "2h ago",
-                    message: "Sent offer documents for review",
-                    type: "Message",
-                    color: "from-green-500 to-teal-500",
-                  },
-                ].map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-5 p-6 rounded-3xl bg-white/80 dark:bg-white/5 backdrop-blur-sm border-2 border-border hover:border-primary/50 transition-all duration-500 hover:scale-105 hover:shadow-xl"
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center flex-shrink-0 shadow-lg`}
-                    >
-                      <item.icon className="w-7 h-7 text-white" />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="font-black text-lg text-foreground">{item.name}</p>
-                        <span className="text-sm font-bold text-muted-foreground">{item.time}</span>
-                      </div>
-                      <p className="text-base text-foreground/70 leading-relaxed font-medium">{item.message}</p>
-                      <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                        {item.type}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function FeaturesSection() {
-  const { ref, visibleItems } = useStaggeredAnimation(6)
-
-  const features = [
-    {
-      icon: Sparkles,
-      title: "AI-Powered Triage",
-      description: "Claude AI automatically flags urgent emails, summarizes threads, and drafts personalized responses",
-      span: "col-span-12 md:col-span-8 row-span-1",
-      gradient: "from-blue-500/10 to-cyan-500/10",
-    },
+  const coreFeatures = [
     {
       icon: Mail,
-      title: "Unified Timeline",
-      description: "Every email, call, text, and note in one beautiful chronological view",
-      span: "col-span-12 md:col-span-4 row-span-2",
-      gradient: "from-purple-500/10 to-pink-500/10",
+      title: 'Unified Inbox',
+      description: 'Manage all your email accounts (Gmail, Outlook) in one centralized inbox. AI automatically triages, prioritizes, and organizes messages by urgency and type.',
+      benefits: ['Multi-account support', 'Smart prioritization', 'Thread management', 'Real-time sync'],
+    },
+    {
+      icon: Brain,
+      title: 'AI Email Triage',
+      description: 'Our advanced AI analyzes every email and automatically categorizes it as an offer, lead inquiry, inspection request, or general communication. Never miss a critical message again.',
+      benefits: ['Instant categorization', 'Urgency scoring', 'Lead detection', 'Auto-prioritization'],
+    },
+    {
+      icon: FileText,
+      title: 'AI Draft Generation',
+      description: 'Generate personalized email responses in your voice. AI creates multiple draft variations, learns your communication style, and ensures every response maintains your professional tone.',
+      benefits: ['Multiple variants', 'Voice matching', 'Context-aware', 'One-click send'],
     },
     {
       icon: Calendar,
-      title: "Smart Automation",
-      description: "Automatically convert emails into tasks and calendar events",
-      span: "col-span-12 md:col-span-4 row-span-1",
-      gradient: "from-orange-500/10 to-red-500/10",
+      title: 'Smart Calendar',
+      description: 'AI suggests optimal meeting times based on your availability and preferences. Automatically convert emails to calendar events and manage your schedule intelligently.',
+      benefits: ['Auto-scheduling', 'Conflict detection', 'Smart suggestions', 'Multi-calendar sync'],
     },
     {
-      icon: Shield,
-      title: "Trustworthy AI",
-      description: "AI suggests, you approve. Human-in-the-loop design means you're always in control",
-      span: "col-span-12 md:col-span-4 row-span-1",
-      gradient: "from-green-500/10 to-teal-500/10",
-    },
-    {
-      icon: Zap,
-      title: "Lightning Fast",
-      description: "Timeline loads in under 500ms. No more waiting for clunky software",
-      span: "col-span-12 md:col-span-5 row-span-1",
-      gradient: "from-yellow-500/10 to-orange-500/10",
+      icon: CheckSquare,
+      title: 'Task Automation',
+      description: 'Turn emails into actionable tasks automatically. AI extracts action items, sets priorities, and creates follow-up reminders. Never drop the ball on client requests.',
+      benefits: ['Auto-task creation', 'Priority detection', 'Deadline tracking', 'Kanban boards'],
     },
     {
       icon: BarChart3,
-      title: "Advanced Analytics",
-      description: "Track response times, conversion rates, and client engagement metrics",
-      span: "col-span-12 md:col-span-7 row-span-1",
-      gradient: "from-indigo-500/10 to-purple-500/10",
+      title: 'Analytics & Insights',
+      description: 'Track your productivity, email response times, lead conversion rates, and ROI. Get actionable insights to grow your business and improve client relationships.',
+      benefits: ['Response time metrics', 'Lead conversion tracking', 'Productivity reports', 'ROI analysis'],
     },
-  ]
+    {
+      icon: Camera,
+      title: 'VisionHome AI',
+      description: 'Scan property photos with computer vision technology. Get instant property analysis, renovation suggestions, and virtual staging recommendations powered by advanced AI.',
+      benefits: ['Property analysis', 'Renovation ideas', 'Virtual staging', 'Market insights'],
+    },
+    {
+      icon: MapPin,
+      title: 'Neighborhood Whisper',
+      description: 'AI-powered neighborhood fit scores and analysis. Get comprehensive reports on schools, demographics, market trends, and lifestyle fit for your clients.',
+      benefits: ['Fit scoring', 'Market analysis', 'School ratings', 'Trend forecasting'],
+    },
+    {
+      icon: User,
+      title: 'Contact Management',
+      description: 'Unified CRM with complete contact timelines. See every interaction across email, SMS, and social media. Automatic contact enrichment and relationship tracking.',
+      benefits: ['Unified timeline', 'Contact enrichment', 'Relationship tracking', 'Deal pipeline'],
+    },
+    {
+      icon: Building2,
+      title: 'Transaction Pipeline',
+      description: 'Manage your entire transaction lifecycle from offer to closing. Track deals, manage checklists, automate follow-ups, and never miss a critical deadline.',
+      benefits: ['Deal tracking', 'Automated checklists', 'Deadline reminders', 'Commission tracking'],
+    },
+    {
+      icon: Sparkles,
+      title: 'AI Actions',
+      description: 'Human-in-the-loop AI workflow. AI suggests actions like sending follow-ups, scheduling meetings, or updating contact info. You approve before execution.',
+      benefits: ['Action suggestions', 'Human approval', 'Batch processing', 'Smart automation'],
+    },
+    {
+      icon: Users,
+      title: 'Team Collaboration',
+      description: 'Work seamlessly with your team. Shared inboxes, team assignments, collaboration tools, and real-time updates. Perfect for brokerages and teams.',
+      benefits: ['Shared inboxes', 'Team assignments', 'Real-time sync', 'Role management'],
+    },
+  ];
 
-  return (
-    <section id="features" ref={ref} className="py-32 px-6 relative main-bg">
-      <div className="container mx-auto max-w-7xl">
-        <div className="text-center space-y-8 mb-24">
-          <h2 className="text-6xl md:text-8xl font-black text-balance leading-tight text-foreground">
-            Everything you need to dominate
-          </h2>
-          <p className="text-2xl text-foreground/70 max-w-3xl mx-auto text-balance font-semibold">
-            Built for agents who refuse to let opportunities slip away
-          </p>
-        </div>
+  const advancedFeatures = [
+    {
+      title: 'Lead Qualification',
+      description: 'AI automatically scores and qualifies leads from email inquiries. Enrich contacts with property history, buying power analysis, and engagement scoring.',
+      icon: Target,
+    },
+    {
+      title: 'Voice Mode',
+      description: 'Dictate emails and tasks using voice commands. Perfect for when you\'re on the go or between showings.',
+      icon: MessageSquare,
+    },
+    {
+      title: 'Integrations',
+      description: 'Connect with Gmail, Outlook, Twilio SMS, WhatsApp, and more. All communications unified in one timeline.',
+      icon: Workflow,
+    },
+    {
+      title: 'Security',
+      description: 'Enterprise-grade security with AES-256 encryption, RBAC, audit logs, and GDPR compliance. Your data is always protected.',
+      icon: Lock,
+    },
+  ];
 
-        <div className="grid grid-cols-12 auto-rows-[280px] gap-6">
-          {features.map((feature, i) => (
-            <Card
-              key={i}
-              className={`${feature.span} glass-card p-10 relative overflow-hidden group transition-all duration-700 hover:scale-[1.02] hover:shadow-2xl ${
-                visibleItems[i] ? "opacity-100 scale-100" : "opacity-0 scale-90"
-              }`}
-              style={{ transitionDelay: `${i * 50}ms` }}
-            >
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-              />
-              <div className="relative z-10 h-full flex flex-col">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-8 shadow-2xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                  <feature.icon className="w-10 h-10 text-white" />
-                </div>
-                <h3 className="text-3xl font-black text-foreground mb-5">{feature.title}</h3>
-                <p className="text-lg text-foreground/70 leading-relaxed font-semibold">{feature.description}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function StatsSection() {
-  const { ref, isVisible } = useScrollAnimation()
-  const [counts, setCounts] = useState([0, 0, 0, 0])
-
-  useEffect(() => {
-    if (!isVisible) return
-
-    const targets = [500, 5, 98, 24]
-    const duration = 2000
-    const steps = 60
-    const increment = targets.map((target) => target / steps)
-
-    let currentStep = 0
-    const timer = setInterval(() => {
-      currentStep++
-      setCounts(targets.map((target, i) => Math.min(Math.floor(increment[i] * currentStep), target)))
-
-      if (currentStep >= steps) {
-        clearInterval(timer)
-        setCounts(targets)
-      }
-    }, duration / steps)
-
-    return () => clearInterval(timer)
-  }, [isVisible])
+  const useCases = [
+    {
+      title: 'Lead Response Automation',
+      description: 'Automatically detect new leads, generate personalized responses, and schedule follow-ups. Never let a lead go cold.',
+      icon: Rocket,
+    },
+    {
+      title: 'Offer Management',
+      description: 'Instantly recognize offers, analyze terms, and generate counter-offer suggestions. Speed up your negotiation process.',
+      icon: FileText,
+    },
+    {
+      title: 'Client Communication',
+      description: 'Maintain consistent communication with all clients. Auto-draft updates, schedule showings, and never miss a check-in.',
+      icon: MessageSquare,
+    },
+    {
+      title: 'Transaction Management',
+      description: 'Track every transaction from offer to closing. Automated checklists, deadline reminders, and milestone tracking.',
+      icon: CheckSquare,
+    },
+  ];
 
   const stats = [
-    { value: counts[0], suffix: "+", label: "Active Agents", icon: Users },
-    { value: counts[1], suffix: "hrs", label: "Saved Per Week", icon: Clock },
-    { value: counts[2], suffix: "%", label: "Satisfaction Rate", icon: Target },
-    { value: counts[3], suffix: "/7", label: "AI Assistant", icon: Sparkles },
-  ]
+    { value: '10+', label: 'Hours Saved Per Week', icon: Clock },
+    { value: '73%', label: 'Faster Response Time', icon: Zap },
+    { value: '500+', label: 'AI Actions Per Month', icon: Sparkles },
+    { value: '99.9%', label: 'Uptime SLA', icon: Shield },
+  ];
 
-  return (
-    <section ref={ref} className="py-32 px-6 relative main-bg">
-      <div className="container mx-auto max-w-7xl">
-        <div className="grid md:grid-cols-4 gap-12">
-          {stats.map((stat, i) => (
-            <div
-              key={i}
-              className={`text-center space-y-6 transition-all duration-1000 ${
-                isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-              }`}
-              style={{ transitionDelay: `${i * 100}ms` }}
-            >
-              <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto shadow-2xl hover:scale-110 transition-transform duration-300">
-                <stat.icon className="w-12 h-12 text-white" />
-              </div>
-              <div className="text-7xl font-black bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                {stat.value}
-                {stat.suffix}
-              </div>
-              <div className="text-lg font-black text-muted-foreground">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function PricingSection() {
-  const { ref, visibleItems } = useStaggeredAnimation(3)
-  const [hoveredCard, setHoveredCard] = useState<number | null>(null)
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left - rect.width / 2
-    const y = e.clientY - rect.top - rect.height / 2
-    setMousePos({ x: x / 20, y: y / 20 })
-    setHoveredCard(index)
-  }
-
-  const handleMouseLeave = () => {
-    setHoveredCard(null)
-    setMousePos({ x: 0, y: 0 })
-  }
-
-  const plans = [
+  const testimonials = [
     {
-      name: "Solo Agent",
-      price: "$39",
-      description: "Perfect for individual agents",
-      features: ["Unlimited contacts", "Email integration", "AI-powered triage", "Unified timeline", "Mobile app"],
-      cta: "Start Free Trial",
+      name: 'Sarah Johnson',
+      role: 'Top Producer, Century 21',
+      content: 'RealInbox AI transformed how I manage my business. I save 2 hours daily and never miss a lead.',
+      rating: 5,
+    },
+    {
+      name: 'Michael Chen',
+      role: 'Team Lead, Keller Williams',
+      content: 'The AI draft feature is incredible. It matches my voice perfectly and generates responses I\'d write myself.',
+      rating: 5,
+    },
+    {
+      name: 'Emily Rodriguez',
+      role: 'Independent Agent',
+      content: 'Finally, a tool that understands real estate. The transaction pipeline feature alone is worth the price.',
+      rating: 5,
+    },
+  ];
+
+  const pricingTiers = [
+    {
+      name: 'Solo Agent',
+      price: '$29',
+      period: '/month',
+      description: 'Perfect for individual agents',
+      features: [
+        '1 email account',
+        '500 AI actions/month',
+        'Core features',
+        'Email support',
+      ],
       popular: false,
     },
     {
-      name: "Pro Agent",
-      price: "$99",
-      description: "For top producers",
+      name: 'Pro Agent',
+      price: '$49',
+      period: '/month',
+      description: 'For power users and top producers',
       features: [
-        "Everything in Solo",
-        "Transaction management",
-        "MLS integration",
-        "Advanced analytics",
-        "Priority support",
-        "Custom workflows",
+        '3 email accounts',
+        'Unlimited AI actions',
+        'Advanced analytics',
+        'Voice mode',
+        'Priority support',
       ],
-      cta: "Start Free Trial",
       popular: true,
     },
     {
-      name: "Team",
-      price: "$199",
-      description: "+ $49 per additional user",
+      name: 'Team',
+      price: '$149',
+      period: '/month',
+      description: 'For teams and small brokerages',
       features: [
-        "Everything in Pro",
-        "Team collaboration",
-        "Shared dashboards",
-        "Admin controls",
-        "Dedicated support",
-        "Custom integrations",
+        '5 agents included',
+        'Shared inboxes',
+        'Team collaboration',
+        'Admin dashboard',
+        'Dedicated support',
       ],
-      cta: "Contact Sales",
       popular: false,
     },
-  ]
+  ];
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+      },
+    },
+  };
+
+  // Parallax transforms
+  const heroY = useTransform(scrollYProgress, [0, 0.5], [0, -50]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
 
   return (
-    <section id="pricing" ref={ref} className="py-32 px-6 main-bg">
-      <div className="container mx-auto max-w-7xl">
-        <div className="text-center space-y-8 mb-24">
-          <h2 className="text-6xl md:text-8xl font-black text-foreground">Choose your plan</h2>
-          <p className="text-2xl text-foreground/70 max-w-3xl mx-auto font-semibold">
-            Start free, scale as you grow. No hidden fees.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, i) => (
-            <div
-              key={i}
-              className={`relative transition-all duration-700 ${
-                visibleItems[i] ? "opacity-100 scale-100" : "opacity-0 scale-90"
-              }`}
-              onMouseMove={(e) => handleMouseMove(e, i)}
-              onMouseLeave={handleMouseLeave}
-              style={{
-                transform: hoveredCard === i ? `translate(${mousePos.x}px, ${mousePos.y}px)` : "translate(0px, 0px)",
-                transition: hoveredCard === i ? "transform 0.1s ease-out" : "transform 0.3s ease-out",
-              }}
+    <div className="min-h-screen bg-white relative overflow-hidden">
+      {/* Subtle background gradient */}
+      <div className="fixed inset-0 bg-gradient-to-b from-gray-50 via-white to-gray-50 pointer-events-none z-0"></div>
+      
+      {/* Header */}
+      <motion.header 
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm"
+      >
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <motion.div 
+              className="flex items-center gap-2"
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.2 }}
             >
-              {plan.popular && (
-                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white text-sm font-black rounded-full shadow-xl">
-                  MOST POPULAR
-                </div>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                <Mail className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-semibold text-gray-900">RealInbox AI Pro</span>
+            </motion.div>
+            <div className="flex items-center gap-4">
+              {isAuthenticated ? (
+                <Button onClick={() => router.push('/dashboard')} variant="default">
+                  Go to Dashboard
+                </Button>
+              ) : (
+                <>
+                  <Link href="/signin">
+                    <Button variant="ghost">Sign In</Button>
+                  </Link>
+                  <Link href="/signup">
+                    <Button>Get Started</Button>
+                  </Link>
+                </>
               )}
-              <Card
-                className={`bg-white dark:bg-white/95 backdrop-blur-xl p-10 space-y-8 relative overflow-hidden border-2 transition-all duration-500 h-full ${
-                  plan.popular
-                    ? "border-primary shadow-2xl shadow-primary/20 scale-[1.02]"
-                    : "border-border/20 hover:border-primary/50"
-                } ${hoveredCard === i ? "shadow-3xl scale-105" : ""}`}
-              >
-                {plan.popular && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 pointer-events-none" />
-                )}
-                <div className="relative z-10 space-y-6">
-                  <h3 className="text-3xl font-black text-gray-900">{plan.name}</h3>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-6xl font-black text-gray-900">{plan.price}</span>
-                    <span className="text-gray-500 font-bold text-lg">/ month</span>
-                  </div>
-                  <p className="text-base text-gray-600 font-semibold">{plan.description}</p>
-                </div>
+            </div>
+          </div>
+        </div>
+      </motion.header>
 
-                <div className="relative z-10 border-t border-gray-200 pt-8">
-                  <ul className="space-y-5">
-                    {plan.features.map((feature, j) => (
-                      <li key={j} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" />
-                        <span className="text-base font-semibold text-gray-700 leading-relaxed">{feature}</span>
+      {/* Hero Section */}
+      <section ref={heroRef} className="container mx-auto px-4 py-20 md:py-32 relative z-10">
+        <motion.div 
+          className="max-w-5xl mx-auto text-center"
+          style={{ y: heroY, opacity: heroOpacity }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8 }}
+            className="mb-6"
+          >
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
+              <Sparkles className="w-4 h-4" />
+              Powered by Claude Sonnet 4.5 AI
+            </span>
+          </motion.div>
+          
+          <motion.h1 
+            className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+          >
+            Stop Drowning in Email Chaos
+            <span className="block text-blue-600 mt-4">
+              Start Closing More Deals
+            </span>
+          </motion.h1>
+          
+          <TextReveal delay={0.4}>
+            <p className="text-xl md:text-2xl text-gray-600 mb-4 max-w-3xl mx-auto font-medium">
+              The all-in-one AI platform that automates your inbox, qualifies leads, drafts responses, 
+              and manages your entire real estate business. Save 10+ hours per week.
+            </p>
+          </TextReveal>
+          
+          <TextReveal delay={0.6}>
+            <p className="text-lg text-gray-500 mb-8 max-w-2xl mx-auto">
+              Used by 500+ real estate professionals. Trusted by top producers and teams nationwide.
+            </p>
+          </TextReveal>
+          
+          <motion.div 
+            className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8, duration: 0.8 }}
+          >
+            {!isAuthenticated && (
+              <>
+                <Link href="/signup">
+                  <Button size="lg" className="w-full sm:w-auto text-lg px-8 py-6 shadow-lg">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </Link>
+                <Link href="/signin">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-6">
+                    Watch Demo
+                    <Play className="ml-2 w-5 h-5" />
+                  </Button>
+                </Link>
+              </>
+            )}
+          </motion.div>
+
+          {/* Stats Bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 0.8 }}
+            className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto"
+          >
+            {stats.map((stat, index) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={index} className="p-6 bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-center mb-3">
+                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</div>
+                  <div className="text-sm text-gray-600">{stat.label}</div>
+                </Card>
+              );
+            })}
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-20 bg-gray-50 relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                How RealInbox AI Works
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Three simple steps to transform your business
+              </p>
+            </div>
+          </TextReveal>
+          
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {[
+              {
+                step: '01',
+                title: 'Connect Your Accounts',
+                description: 'Securely connect your Gmail, Outlook, and other email accounts. Our AI starts analyzing immediately.',
+                icon: Mail,
+              },
+              {
+                step: '02',
+                title: 'AI Takes Over',
+                description: 'AI triages emails, generates drafts, qualifies leads, and suggests actions. You review and approve.',
+                icon: Brain,
+              },
+              {
+                step: '03',
+                title: 'Close More Deals',
+                description: 'Never miss a lead. Respond faster. Close more deals. Watch your productivity and revenue soar.',
+                icon: TrendingUp,
+              },
+            ].map((step, index) => {
+              const Icon = step.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.2, duration: 0.6 }}
+                  className="relative"
+                >
+                  <Card className="p-8 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
+                    <div className="text-5xl font-bold text-blue-600 mb-4 opacity-20">{step.step}</div>
+                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
+                      <Icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
+                    <p className="text-gray-600">{step.description}</p>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Core Features Section */}
+      <section className="py-20 bg-white relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Everything You Need to Succeed
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                12 powerful features designed specifically for real estate professionals
+              </p>
+            </div>
+          </TextReveal>
+          
+          <motion.div 
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+          >
+            {coreFeatures.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <motion.div
+                  key={index}
+                  variants={itemVariants}
+                  whileHover={{ y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="p-6 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-all">
+                    <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-4">
+                      <Icon className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
+                    <p className="text-gray-600 mb-4">{feature.description}</p>
+                    <div className="space-y-2">
+                      {feature.benefits.map((benefit, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
+                          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <span>{benefit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Use Cases Section */}
+      <section className="py-20 bg-gray-50 relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Real-World Use Cases
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                See how RealInbox AI solves real problems for real estate professionals
+              </p>
+            </div>
+          </TextReveal>
+          
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {useCases.map((useCase, index) => {
+              const Icon = useCase.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: index % 2 === 0 ? -30 : 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <Card className="p-8 bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">{useCase.title}</h3>
+                        <p className="text-gray-600">{useCase.description}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Advanced Features Section */}
+      <section className="py-20 bg-white relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Enterprise-Grade Features
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Built for scale, security, and performance
+              </p>
+            </div>
+          </TextReveal>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            {advancedFeatures.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                >
+                  <Card className="p-6 text-center bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                      <Icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
+                    <p className="text-sm text-gray-600">{feature.description}</p>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="py-20 bg-gray-50 relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Loved by Real Estate Professionals
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Join hundreds of agents who have transformed their business
+              </p>
+            </div>
+          </TextReveal>
+          
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {testimonials.map((testimonial, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.2, duration: 0.6 }}
+              >
+                <Card className="p-8 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
+                  <div className="flex gap-1 mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 mb-6 italic">"{testimonial.content}"</p>
+                  <div>
+                    <div className="font-bold text-gray-900">{testimonial.name}</div>
+                    <div className="text-sm text-gray-600">{testimonial.role}</div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-20 bg-white relative z-10">
+        <div className="container mx-auto px-4">
+          <TextReveal>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Simple, Transparent Pricing
+              </h2>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Choose the plan that fits your business. All plans include 14-day free trial.
+              </p>
+            </div>
+          </TextReveal>
+          
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {pricingTiers.map((tier, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1, duration: 0.6 }}
+                className={`relative ${tier.popular ? 'md:-mt-4 md:mb-4' : ''}`}
+              >
+                {tier.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full shadow-sm">
+                    Most Popular
+                  </div>
+                )}
+                <Card className={`p-8 h-full bg-white border-2 shadow-lg hover:shadow-xl transition-shadow ${tier.popular ? 'border-blue-600' : 'border-gray-200'}`}>
+                  <div className="text-center mb-6">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{tier.name}</h3>
+                    <p className="text-gray-600 mb-4">{tier.description}</p>
+                    <div className="flex items-baseline justify-center gap-2">
+                      <span className="text-5xl font-bold text-gray-900">{tier.price}</span>
+                      <span className="text-gray-600">{tier.period}</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-3 mb-8">
+                    {tier.features.map((feature, i) => (
+                      <li key={i} className="flex items-center gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                        <span className="text-gray-700">{feature}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
-
-                <Button
-                  className={`relative z-10 w-full h-14 font-black text-base rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 ${
-                    plan.popular
-                      ? "bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white"
-                      : "bg-gray-900 hover:bg-gray-800 text-white"
-                  }`}
-                >
-                  {plan.cta}
-                </Button>
-              </Card>
-            </div>
-          ))}
+                  {!isAuthenticated && (
+                    <Link href="/signup">
+                      <Button className="w-full" size="lg" variant={tier.popular ? 'default' : 'outline'}>
+                        Start Free Trial
+                      </Button>
+                    </Link>
+                  )}
+                </Card>
+              </motion.div>
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
-  )
-}
+      </section>
 
-function CTASection() {
-  const { ref, isVisible } = useScrollAnimation()
-
-  return (
-    <section ref={ref} className="py-40 px-6 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20" />
-      <div className="container mx-auto max-w-6xl relative z-10">
-        <Card
-          className={`glass-card p-20 text-center space-y-12 relative overflow-hidden transition-all duration-1000 ${
-            isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
-        >
-          <div className="relative z-10">
-            <h2 className="text-6xl md:text-8xl font-black text-balance mb-10 leading-tight text-foreground">
-              Ready to transform your workflow?
+      {/* Final CTA Section */}
+      <section className="py-20 bg-gray-900 relative z-10">
+        <div className="container mx-auto px-4 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Ready to Transform Your Business?
             </h2>
-            <p className="text-2xl text-foreground/70 max-w-3xl mx-auto mb-16 font-semibold">
-              Join hundreds of agents who've already taken control of their business
+            <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
+              Join thousands of real estate professionals who have revolutionized their workflow with AI.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <Link href="/signup">
-                <Button
-                  size="lg"
-                  className="bg-gradient-to-r from-primary to-secondary hover:shadow-2xl hover:scale-105 text-white text-xl px-16 h-20 font-black shadow-2xl rounded-2xl transition-all duration-300"
-                >
-                  Start Your Free Trial
-                  <ArrowRight className="ml-4 w-7 h-7" />
-                </Button>
-              </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-xl px-16 h-20 font-black glass-card border-2 hover:border-primary bg-transparent rounded-2xl hover:scale-105 transition-all duration-300"
-              >
-                Schedule a Demo
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
-    </section>
-  )
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-border/40 py-24 px-6 relative main-bg">
-      <div className="container mx-auto max-w-7xl">
-        <div className="grid md:grid-cols-5 gap-16 mb-20">
-          <div className="md:col-span-2 space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-xl">
-                <Building2 className="w-8 h-8 text-white" />
+            {!isAuthenticated && (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" variant="secondary" className="text-lg px-8 py-6 shadow-lg">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </Link>
+                <Link href="/signin">
+                  <Button size="lg" variant="outline" className="text-white border-white hover:bg-white hover:text-gray-900 text-lg px-8 py-6">
+                    Sign In
+                  </Button>
+                </Link>
               </div>
-              <span className="text-4xl font-black text-foreground">AgentFlow</span>
+            )}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-400 py-12 relative z-10">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-white font-semibold">RealInbox AI Pro</span>
+              </div>
+              <p className="text-sm">
+                The all-in-one AI platform for real estate professionals. Transform your business with intelligent automation.
+              </p>
             </div>
-            <p className="text-foreground/70 leading-relaxed max-w-md font-semibold text-lg">
-              The intelligent command center for modern real estate agents. Transform chaos into calm with AI-powered
-              automation.
-            </p>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Product</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/features" className="hover:text-white transition-colors">Features</Link></li>
+                <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
+                <li><Link href="/integrations" className="hover:text-white transition-colors">Integrations</Link></li>
+                <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Company</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/about" className="hover:text-white transition-colors">About</Link></li>
+                <li><Link href="/blog" className="hover:text-white transition-colors">Blog</Link></li>
+                <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
+                <li><Link href="/careers" className="hover:text-white transition-colors">Careers</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link></li>
+                <li><Link href="/terms" className="hover:text-white transition-colors">Terms</Link></li>
+                <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
+                <li><Link href="/gdpr" className="hover:text-white transition-colors">GDPR</Link></li>
+              </ul>
+            </div>
           </div>
-          <div className="space-y-6">
-            <h4 className="font-black text-base uppercase tracking-wider text-foreground">Product</h4>
-            <ul className="space-y-4 text-base text-muted-foreground font-bold">
-              {["Features", "Pricing", "Integrations", "Changelog"].map((item, i) => (
-                <li key={i}>
-                  <Link href="#" className="hover:text-primary transition-colors">
-                    {item}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="space-y-6">
-            <h4 className="font-black text-base uppercase tracking-wider text-foreground">Company</h4>
-            <ul className="space-y-4 text-base text-muted-foreground font-bold">
-              {["About", "Blog", "Careers", "Contact"].map((item, i) => (
-                <li key={i}>
-                  <Link href="#" className="hover:text-primary transition-colors">
-                    {item}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="space-y-6">
-            <h4 className="font-black text-base uppercase tracking-wider text-foreground">Legal</h4>
-            <ul className="space-y-4 text-base text-muted-foreground font-bold">
-              {["Privacy", "Terms", "Security"].map((item, i) => (
-                <li key={i}>
-                  <Link href="#" className="hover:text-primary transition-colors">
-                    {item}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          <div className="border-t border-gray-800 pt-8 text-center text-sm">
+            <p>&copy; {new Date().getFullYear()} RealInbox AI Pro. All rights reserved.</p>
           </div>
         </div>
-        <div className="pt-12 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-6">
-          <p className="text-base text-muted-foreground font-bold">© 2025 AgentFlow. All rights reserved.</p>
-          <div className="flex items-center gap-10 text-base text-muted-foreground font-bold">
-            <Link href="#" className="hover:text-primary transition-colors">
-              Twitter
-            </Link>
-            <Link href="#" className="hover:text-primary transition-colors">
-              LinkedIn
-            </Link>
-          </div>
-        </div>
-      </div>
-    </footer>
-  )
+      </footer>
+    </div>
+  );
 }

@@ -1,374 +1,192 @@
-"use client"
+'use client';
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { ArrowUpRight, Mail, Calendar, TrendingUp, Users, CheckCircle2, Clock, Loader2, Phone } from "lucide-react"
-import Link from "next/link"
-import { useAuthStore, useAuthHydration } from "@/lib/stores/authStore"
-import { contactsService, emailService, taskService, communicationsService } from "@/lib/api"
-import { areTokensValid } from "@/lib/utils/auth"
-import toast from "react-hot-toast"
-import { formatDistanceToNow } from "date-fns"
-import { useQuery } from "@tanstack/react-query"
-
-interface DashboardStats {
-  activeContacts: number
-  unreadEmails: number
-  urgentEmails: number
-  tasksToday: number
-  tasksCompleted: number
-  upcomingMeetings: number
-}
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useWebSocket } from '@/lib/websocket';
+import { useAuthStore } from '@/lib/stores/authStore';
+import { Card } from '@/components/ui/card';
+import { useAPI } from '@/lib/hooks/useAPI';
+import { analyticsAPI, emailAPI } from '@/lib/api';
+import { Sidebar } from '@/components/Sidebar';
+import { Mail, Calendar, TrendingUp, Eye, MapPin, Activity, Clock } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, accessToken, refreshToken } = useAuthStore()
-  const hasHydrated = useAuthHydration()
-  
-  // Only run queries when authenticated and tokens are valid
-  const shouldFetchData = hasHydrated && isAuthenticated && areTokensValid(accessToken, refreshToken)
-  
-  // Fetch dashboard data with React Query
-  const { data: dashboardData, isLoading, error: dashboardError } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: async () => {
-      console.log('[Dashboard] Fetching dashboard data...')
-      
-      try {
-        const [emailStatsRes, contactsRes, tasksRes, commsRes] = await Promise.all([
-          emailService.getEmailStats(),
-          contactsService.listContacts({ limit: 100 }),
-          taskService.listTasks(),
-          communicationsService.listCommunications({ limit: 4 }),
-        ])
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
+  const { accessToken } = useAuthStore();
 
-        console.log('[Dashboard] Data fetched successfully:', {
-          emailStats: emailStatsRes,
-          contactsCount: contactsRes?.contacts?.length || contactsRes?.total || 0,
-          tasksCount: Array.isArray(tasksRes) ? tasksRes.length : 0,
-          commsCount: Array.isArray(commsRes) ? commsRes.length : 0,
-        })
-
-        // Calculate stats
-        const today = new Date().toISOString().split('T')[0]
-        const todayTasks = Array.isArray(tasksRes) ? tasksRes.filter((t: any) => 
-          t.due_date?.startsWith(today)
-        ) : []
-        const completedToday = todayTasks.filter((t: any) => t.status === 'done' || t.is_completed)
-
-        // Get priority contacts
-        const highPriorityContacts = (contactsRes?.contacts || [])
-          .filter((c: any) => 
-            c.contact_status === 'hot_lead' || 
-            c.contact_status === 'active' ||
-            c.relationship_score > 0.7
-          )
-          .slice(0, 4)
-
-        return {
-          stats: {
-            activeContacts: contactsRes?.total ?? contactsRes?.contacts?.length ?? 0,
-            unreadEmails: emailStatsRes?.unread ?? emailStatsRes?.today ?? 0,
-            urgentEmails: emailStatsRes?.urgent ?? 0,
-            tasksToday: todayTasks.length,
-            tasksCompleted: completedToday.length,
-            upcomingMeetings: 0,
-          },
-          priorityContacts: highPriorityContacts,
-          recentActivity: Array.isArray(commsRes) ? commsRes : [],
-        }
-      } catch (error: any) {
-        console.error('[Dashboard] Error loading dashboard data:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          url: error.config?.url,
-        })
-        
-        // Don't show toast for network errors (backend offline) - ApiStatusCheck handles that
-        const isNetworkError = !error?.response
-        if (!isNetworkError && error.response?.status !== 401) {
-          // Only show toast for non-network, non-auth errors
-          const errorMessage = error.response?.data?.detail || error.message || 'Failed to load dashboard data'
-          toast.error(errorMessage)
-        }
-        
-        // Re-throw error so React Query can handle it properly
-        throw error
-      }
+  // WebSocket for real-time updates
+  useWebSocket(accessToken, {
+    onNewEmail: (data) => {
+      toast.success('New email received!');
     },
-    enabled: shouldFetchData,
-    refetchOnWindowFocus: true,
-    retry: (failureCount, error: any) => {
-      // Don't retry on network errors (backend offline)
-      if (!error?.response) {
-        return false
-      }
-      // Don't retry on auth errors (401) - user should be redirected
-      if (error?.response?.status === 401) {
-        return false
-      }
-      // Retry up to 1 time for other errors
-      return failureCount < 1
+    onDraftReady: (data) => {
+      toast.success('AI draft ready!');
     },
-  })
+    onTriageComplete: (data) => {
+      toast.success('Email triaged');
+    },
+    onTaskUpdate: (data) => {
+      toast.success('Task updated');
+    },
+  });
 
-  const stats = dashboardData?.stats || {
-    activeContacts: 0,
-    unreadEmails: 0,
-    urgentEmails: 0,
-    tasksToday: 0,
-    tasksCompleted: 0,
-    upcomingMeetings: 0,
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/signin');
+    }
+  }, [isAuthenticated, router]);
+
+  const { data: metrics, isLoading } = useAPI(
+    ['analytics', 'productivity'],
+    () => analyticsAPI.getProductivityMetrics('30d'),
+    { enabled: isAuthenticated }
+  );
+
+  const { data: emails } = useAPI(
+    ['emails', 'unread'],
+    () => emailAPI.listEmails({ limit: 5, archived: false }),
+    { enabled: isAuthenticated }
+  );
+
+  if (!isAuthenticated) {
+    return null;
   }
 
-  const priorityContacts = dashboardData?.priorityContacts || []
-  const recentActivity = dashboardData?.recentActivity || []
+  const stats = [
+    {
+      label: 'Unread Emails',
+      value: emails?.length || metrics?.unread_emails || 0,
+      icon: Mail,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+    },
+    {
+      label: 'Upcoming Events',
+      value: metrics?.upcoming_events || 0,
+      icon: Calendar,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+    },
+    {
+      label: 'Time Saved',
+      value: `${metrics?.time_saved_hours || 0}h`,
+      icon: Clock,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+    },
+    {
+      label: 'AI Insights',
+      value: metrics?.ai_insights || 0,
+      icon: Activity,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+    },
+  ];
 
-  // Show loading state while hydrating auth or fetching data
-  if (!hasHydrated || isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  // Show error state if query failed (but only if not auth-related - auth errors redirect)
-  if (dashboardError && !shouldFetchData) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <p className="text-muted-foreground">Please log in to view your dashboard</p>
-      </div>
-    )
-  }
+  const features = [
+    {
+      title: 'VisionHome AI',
+      description: 'Scan properties with computer vision technology',
+      icon: Eye,
+      href: '/visionhome',
+      gradient: 'from-blue-500 to-indigo-600',
+    },
+    {
+      title: 'Neighborhood Whisper',
+      description: 'AI-powered neighborhood fit scores and insights',
+      icon: MapPin,
+      href: '/neighborhood',
+      gradient: 'from-green-500 to-teal-600',
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Welcome header */}
-      <div>
-        <h1 className="text-3xl font-bold text-balance">Welcome back, {user?.full_name?.split(' ')[0] || 'John'}</h1>
-        <p className="text-muted-foreground mt-1">Here's what's happening with your business today</p>
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Contacts</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeContacts}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <TrendingUp className="h-3 w-3 text-primary" />
-              <Link href="/dashboard/contacts" className="text-primary hover:underline">
-                View all contacts
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unread Messages</CardTitle>
-            <Mail className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.unreadEmails}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              {stats.urgentEmails > 0 ? (
-                <>
-                  <span className="text-destructive">{stats.urgentEmails} urgent</span> require attention
-                </>
-              ) : (
-                <Link href="/dashboard/inbox" className="text-primary hover:underline">
-                  View inbox
-                </Link>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasks Due Today</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.tasksToday}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              {stats.tasksCompleted > 0 ? (
-                <>
-                  <span className="text-primary">{stats.tasksCompleted} completed</span> so far
-                </>
-              ) : (
-                <Link href="/dashboard/tasks" className="text-primary hover:underline">
-                  View all tasks
-                </Link>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Upcoming Meetings</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.upcomingMeetings}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <Clock className="h-3 w-3" />
-              {stats.upcomingMeetings > 0 ? (
-                "Next in 45 minutes"
-              ) : (
-                <Link href="/dashboard/calendar" className="text-primary hover:underline">
-                  View calendar
-                </Link>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent activity */}
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest interactions and updates</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentActivity.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No recent activity to display
-              </p>
-            ) : (
-              recentActivity.map((activity: any, i: number) => {
-                const activityType = activity.communication_type || 'email'
-                const activityTime = activity.created_at || activity.occurred_at
-                  ? formatDistanceToNow(new Date(activity.created_at || activity.occurred_at), { addSuffix: true })
-                  : 'recently'
-                const contactName = activity.contact_name || activity.from_address?.split('@')[0] || 'Unknown'
-
-                return (
-                  <div key={activity.id || i} className="flex items-center gap-4">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>
-                        {contactName.split(" ").map((n: string) => n[0]).join("").toUpperCase() || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium leading-none">
-                        {contactName}{" "}
-                        <span className="text-muted-foreground font-normal">
-                          {activityType === 'email' && 'sent you an email'}
-                          {activityType === 'call' && 'called you'}
-                          {activityType === 'meeting' && 'had a meeting'}
-                          {activityType === 'note' && 'added a note'}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">{activityTime}</p>
-                    </div>
-                    {activityType === "email" && <Mail className="h-4 w-4 text-muted-foreground" />}
-                    {activityType === "meeting" && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                    {activityType === "call" && <Phone className="h-4 w-4 text-muted-foreground" />}
-                    {activityType === "note" && <Users className="h-4 w-4 text-muted-foreground" />}
-                  </div>
-                )
-              })
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Priority contacts */}
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Priority Contacts</CardTitle>
-            <CardDescription>Contacts that need your attention</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {priorityContacts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No priority contacts at the moment
-              </p>
-            ) : (
-              priorityContacts.map((contact: any) => {
-                const fullName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown'
-                const initials = fullName.split(" ").map((n) => n[0]).join("").toUpperCase()
-                const lastContactTime = contact.last_contact_date
-                  ? formatDistanceToNow(new Date(contact.last_contact_date), { addSuffix: true })
-                  : 'No recent contact'
-                const statusDisplay = contact.contact_status?.replace(/_/g, ' ') || 'Contact'
-
-                return (
-                  <div key={contact.id} className="flex items-center gap-4">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>{initials}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium leading-none">{fullName}</p>
-                        <Badge
-                          variant={contact.contact_status === "hot_lead" ? "destructive" : "secondary"}
-                          className="text-xs capitalize"
-                        >
-                          {statusDisplay}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">Last contact: {lastContactTime}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link href={`/dashboard/contacts/${contact.id}`}>
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                )
-              })
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick actions */}
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common tasks to help you stay productive</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" className="justify-start gap-2 h-auto py-3 bg-transparent" asChild>
-              <Link href="/dashboard/contacts">
-                <Users className="h-4 w-4" />
-                Add New Contact
-              </Link>
-            </Button>
-            <Button variant="outline" className="justify-start gap-2 h-auto py-3 bg-transparent" asChild>
-              <Link href="/dashboard/inbox">
-                <Mail className="h-4 w-4" />
-                Compose Email
-              </Link>
-            </Button>
-            <Button variant="outline" className="justify-start gap-2 h-auto py-3 bg-transparent" asChild>
-              <Link href="/dashboard/calendar">
-                <Calendar className="h-4 w-4" />
-                Schedule Meeting
-              </Link>
-            </Button>
-            <Button variant="outline" className="justify-start gap-2 h-auto py-3 bg-transparent" asChild>
-              <Link href="/dashboard/tasks">
-                <CheckCircle2 className="h-4 w-4" />
-                Create Task
-              </Link>
-            </Button>
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="flex-1 p-4 md:p-8 md:ml-64">
+        <div className="space-y-8">
+          {/* Header */}
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+              Welcome back, {user?.full_name || 'User'}!
+            </h1>
+            <p className="text-gray-600">Here's what's happening with your real estate business</p>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, index) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.label} className="p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                      <p className={`text-3xl font-bold ${stat.color}`}>
+                        {isLoading ? '...' : stat.value}
+                      </p>
+                    </div>
+                    <div className={`${stat.bgColor} p-3 rounded-lg`}>
+                      <Icon className={`w-6 h-6 ${stat.color}`} />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {features.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <Card
+                  key={feature.title}
+                  className={`p-6 bg-gradient-to-br ${feature.gradient} text-white cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105`}
+                  onClick={() => router.push(feature.href)}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+                      <Icon className="w-8 h-8" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
+                      <p className="text-white/90">{feature.description}</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Recent Activity */}
+          <Card className="p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Emails</h2>
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading...</div>
+            ) : emails && emails.length > 0 ? (
+              <div className="space-y-4">
+                {emails.slice(0, 5).map((email: any) => (
+                  <div key={email.id} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-lg transition-colors">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{email.sender || 'Unknown'}</p>
+                      <p className="text-sm text-gray-600 truncate">{email.subject || 'No subject'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">No recent emails</div>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

@@ -1,46 +1,87 @@
-import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
-import { cva, type VariantProps } from 'class-variance-authority'
+'use client';
 
-import { cn } from '@/lib/utils'
+import { ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
-const badgeVariants = cva(
-  'inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden',
-  {
-    variants: {
-      variant: {
-        default:
-          'border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
-        secondary:
-          'border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
-        destructive:
-          'border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
-        outline:
-          'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-    },
-  },
-)
-
-function Badge({
-  className,
-  variant,
-  asChild = false,
-  ...props
-}: React.ComponentProps<'span'> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot : 'span'
-
-  return (
-    <Comp
-      data-slot="badge"
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
-  )
+interface BadgeProps {
+  children: ReactNode;
+  variant?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'neon';
+  size?: 'sm' | 'md' | 'lg';
+  animated?: boolean;
+  className?: string;
 }
 
-export { Badge, badgeVariants }
+const variantStyles = {
+  default: 'bg-gray-700 text-gray-300 border-gray-600',
+  success: 'bg-green-500/20 text-green-400 border-green-500/50',
+  warning: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50',
+  error: 'bg-red-500/20 text-red-400 border-red-500/50',
+  info: 'bg-blue-500/20 text-blue-400 border-blue-500/50',
+  neon: 'bg-neon-cyan/20 text-neon-cyan border-neon-cyan/50 shadow-neon-cyan',
+};
+
+const sizeStyles = {
+  sm: 'px-2 py-0.5 text-xs',
+  md: 'px-3 py-1 text-sm',
+  lg: 'px-4 py-1.5 text-base',
+};
+
+export function Badge({
+  children,
+  variant = 'default',
+  size = 'md',
+  animated = false,
+  className,
+}: BadgeProps) {
+  const baseStyles = 'inline-flex items-center justify-center rounded-full font-medium border transition-all duration-300';
+
+  const badge = (
+    <span
+      className={cn(
+        baseStyles,
+        variantStyles[variant],
+        sizeStyles[size],
+        animated && 'animate-pulse',
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+
+  if (animated) {
+    return (
+      <motion.span
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      >
+        {badge}
+      </motion.span>
+    );
+  }
+
+  return badge;
+}
+
+// Count Badge variant
+interface CountBadgeProps {
+  count: number;
+  max?: number;
+  variant?: BadgeProps['variant'];
+  showZero?: boolean;
+}
+
+export function CountBadge({ count, max, variant = 'neon', showZero = false }: CountBadgeProps) {
+  if (!showZero && count === 0) return null;
+
+  const displayCount = max && count > max ? `${max}+` : count.toString();
+
+  return (
+    <Badge variant={variant} size="sm" animated={count > 0}>
+      {displayCount}
+    </Badge>
+  );
+}
+

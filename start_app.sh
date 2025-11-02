@@ -1,9 +1,9 @@
 #!/bin/bash
-# Start Both Servers Script for Mac/Linux
-# This script starts both the backend and frontend servers
+# Start Backend Server Script for Mac/Linux
+# This script starts the backend server
 
 echo "========================================"
-echo "Starting AgentFlow - Backend + Frontend"
+echo "Starting AgentFlow - Backend"
 echo "========================================"
 echo ""
 
@@ -28,40 +28,25 @@ if [ ! -f "backend/venv/bin/activate" ]; then
     echo ""
 fi
 
-# Check if frontend node_modules exists
-if [ ! -d "frontend_nextjs/node_modules" ]; then
-    echo "Frontend dependencies not found!"
-    echo "Installing frontend dependencies..."
-    cd frontend_nextjs
-    npm install
-    cd ..
-    echo ""
-fi
-
-echo "Starting both servers..."
+echo "Starting backend server..."
 echo ""
 echo "Backend will run on: http://localhost:8000"
-echo "Frontend will run on: http://localhost:3000"
 echo ""
-echo "Press CTRL+C to stop both servers"
+echo "Press CTRL+C to stop the server"
 echo "========================================"
 echo ""
 
-# Start backend in background
+# Start backend
 cd backend
-source venv/bin/activate
-python -m uvicorn app.main:app --reload &
-BACKEND_PID=$!
+if [ ! -f "venv/bin/activate" ]; then
+    echo "Virtual environment not found. Creating..."
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+else
+    source venv/bin/activate
+fi
+
+python -m uvicorn app.main:app --reload
 cd ..
-
-# Wait a moment for backend to start
-sleep 3
-
-# Start frontend in foreground
-cd frontend_nextjs
-npm run dev &
-FRONTEND_PID=$!
-
-# Wait for both processes
-wait $BACKEND_PID $FRONTEND_PID
 
