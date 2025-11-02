@@ -16,6 +16,11 @@ from .note import Note
 from .ai_action import AIAction
 from .landing_page import LandingPage
 
+# VisionHome AI & Neighborhood Whisper models
+from .vision_scan import VisionScan
+from .neighborhood_report import NeighborhoodReport
+from .approval_queue import ApprovalQueue, ApprovalFeatureType, ApprovalStatus
+
 # Legacy models - DEPRECATED
 # Message model has been removed - use CommunicationLog instead
 # Draft functionality should be reimplemented using CommunicationLog
@@ -38,6 +43,12 @@ __all__ = [
     "Note",
     "AIAction",
     "LandingPage",
+    # VisionHome AI & Neighborhood Whisper
+    "VisionScan",
+    "NeighborhoodReport",
+    "ApprovalQueue",
+    "ApprovalFeatureType",
+    "ApprovalStatus",
     # Legacy - DEPRECATED
     "Draft",
 ]

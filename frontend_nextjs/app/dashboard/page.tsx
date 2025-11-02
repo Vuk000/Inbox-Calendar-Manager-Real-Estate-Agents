@@ -7,8 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ArrowUpRight, Mail, Calendar, TrendingUp, Users, CheckCircle2, Clock, Loader2, Phone } from "lucide-react"
 import Link from "next/link"
-import { useAuthStore } from "@/lib/stores/authStore"
+import { useAuthStore, useAuthHydration } from "@/lib/stores/authStore"
 import { contactsService, emailService, taskService, communicationsService } from "@/lib/api"
+import { areTokensValid } from "@/lib/utils/auth"
 import toast from "react-hot-toast"
 import { formatDistanceToNow } from "date-fns"
 import { useQuery } from "@tanstack/react-query"
@@ -23,19 +24,32 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuthStore()
+  const { user, isAuthenticated, accessToken, refreshToken } = useAuthStore()
+  const hasHydrated = useAuthHydration()
+  
+  // Only run queries when authenticated and tokens are valid
+  const shouldFetchData = hasHydrated && isAuthenticated && areTokensValid(accessToken, refreshToken)
   
   // Fetch dashboard data with React Query
   const { data: dashboardData, isLoading, error: dashboardError } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
+      console.log('[Dashboard] Fetching dashboard data...')
+      
       try {
         const [emailStatsRes, contactsRes, tasksRes, commsRes] = await Promise.all([
-          emailService.getEmailStats().catch(() => ({ total: 0, unread: 0, urgent: 0 })),
-          contactsService.listContacts({ limit: 100 }).catch(() => ({ contacts: [], total: 0 })),
-          taskService.listTasks().catch(() => []),
-          communicationsService.listCommunications({ limit: 4 }).catch(() => []),
+          emailService.getEmailStats(),
+          contactsService.listContacts({ limit: 100 }),
+          taskService.listTasks(),
+          communicationsService.listCommunications({ limit: 4 }),
         ])
+
+        console.log('[Dashboard] Data fetched successfully:', {
+          emailStats: emailStatsRes,
+          contactsCount: contactsRes?.contacts?.length || contactsRes?.total || 0,
+          tasksCount: Array.isArray(tasksRes) ? tasksRes.length : 0,
+          commsCount: Array.isArray(commsRes) ? commsRes.length : 0,
+        })
 
         // Calculate stats
         const today = new Date().toISOString().split('T')[0]
@@ -45,7 +59,7 @@ export default function DashboardPage() {
         const completedToday = todayTasks.filter((t: any) => t.status === 'done' || t.is_completed)
 
         // Get priority contacts
-        const highPriorityContacts = (contactsRes.contacts || [])
+        const highPriorityContacts = (contactsRes?.contacts || [])
           .filter((c: any) => 
             c.contact_status === 'hot_lead' || 
             c.contact_status === 'active' ||
@@ -55,9 +69,9 @@ export default function DashboardPage() {
 
         return {
           stats: {
-            activeContacts: contactsRes.total || contactsRes.contacts?.length || 0,
-            unreadEmails: emailStatsRes.unread || 0,
-            urgentEmails: emailStatsRes.urgent || 0,
+            activeContacts: contactsRes?.total ?? contactsRes?.contacts?.length ?? 0,
+            unreadEmails: emailStatsRes?.unread ?? emailStatsRes?.today ?? 0,
+            urgentEmails: emailStatsRes?.urgent ?? 0,
             tasksToday: todayTasks.length,
             tasksCompleted: completedToday.length,
             upcomingMeetings: 0,
@@ -65,31 +79,35 @@ export default function DashboardPage() {
           priorityContacts: highPriorityContacts,
           recentActivity: Array.isArray(commsRes) ? commsRes : [],
         }
-      } catch (error) {
-        console.error('Error loading dashboard:', error)
-        // Don't show toast for network errors - ApiStatusCheck handles that
-        const isNetworkError = !(error as any)?.response
-        if (!isNetworkError) {
-          toast.error('Failed to load dashboard data')
+      } catch (error: any) {
+        console.error('[Dashboard] Error loading dashboard data:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          url: error.config?.url,
+        })
+        
+        // Don't show toast for network errors (backend offline) - ApiStatusCheck handles that
+        const isNetworkError = !error?.response
+        if (!isNetworkError && error.response?.status !== 401) {
+          // Only show toast for non-network, non-auth errors
+          const errorMessage = error.response?.data?.detail || error.message || 'Failed to load dashboard data'
+          toast.error(errorMessage)
         }
-        return {
-          stats: {
-            activeContacts: 0,
-            unreadEmails: 0,
-            urgentEmails: 0,
-            tasksToday: 0,
-            tasksCompleted: 0,
-            upcomingMeetings: 0,
-          },
-          priorityContacts: [],
-          recentActivity: [],
-        }
+        
+        // Re-throw error so React Query can handle it properly
+        throw error
       }
     },
+    enabled: shouldFetchData,
     refetchOnWindowFocus: true,
     retry: (failureCount, error: any) => {
       // Don't retry on network errors (backend offline)
       if (!error?.response) {
+        return false
+      }
+      // Don't retry on auth errors (401) - user should be redirected
+      if (error?.response?.status === 401) {
         return false
       }
       // Retry up to 1 time for other errors
@@ -109,10 +127,20 @@ export default function DashboardPage() {
   const priorityContacts = dashboardData?.priorityContacts || []
   const recentActivity = dashboardData?.recentActivity || []
 
-  if (isLoading) {
+  // Show loading state while hydrating auth or fetching data
+  if (!hasHydrated || isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Show error state if query failed (but only if not auth-related - auth errors redirect)
+  if (dashboardError && !shouldFetchData) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <p className="text-muted-foreground">Please log in to view your dashboard</p>
       </div>
     )
   }

@@ -212,6 +212,27 @@ class DraftNotApprovedException(BusinessLogicException):
 
 class SubscriptionLimitException(BusinessLogicException):
     """Subscription tier limit reached"""
+    def __init__(
+        self,
+        message: str = "Subscription tier limit reached",
+        feature: Optional[str] = None,
+        limit: Optional[int] = None,
+        current_usage: Optional[int] = None,
+        **kwargs
+    ):
+        self.feature = feature
+        self.limit = limit
+        self.current_usage = current_usage
+        super().__init__(message, **kwargs)
+
+
+class VisionProcessingException(AIAgentException):
+    """VisionHome AI processing errors"""
+    pass
+
+
+class NeighborhoodSearchException(AIAgentException):
+    """Neighborhood Whisper search errors"""
     pass
 
 

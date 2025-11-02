@@ -71,6 +71,20 @@ def test_user(db):
 
 
 @pytest.fixture
+def test_token(client, test_user):
+    """Get authentication token for test user"""
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "test@example.com",
+            "password": "testpassword123"
+        }
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
+@pytest.fixture
 def auth_headers(client, test_user):
     """Get authentication headers for test user"""
     response = client.post(

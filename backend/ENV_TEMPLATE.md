@@ -75,8 +75,26 @@ TWITTER_CLIENT_ID=
 FACEBOOK_APP_ID=
 HUBSPOT_API_KEY=
 ZILLOW_API_KEY=
+YELP_API_KEY=
 STRIPE_API_KEY=
 SENTRY_DSN=
+
+# AI Services - OpenAI (for Neighborhood Whisper NLP)
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+
+# Google Cloud Vision (for VisionHome AI)
+# Download service account JSON from Google Cloud Console
+# Set path to the JSON file (e.g., /path/to/service-account-key.json)
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+
+# Subscription Tier Limits (defaults)
+FREE_TIER_VISION_SCANS=5
+FREE_TIER_NEIGHBORHOOD_SEARCHES=10
+SOLO_TIER_VISION_SCANS=50
+SOLO_TIER_NEIGHBORHOOD_SEARCHES=100
+PRO_TIER_VISION_SCANS=100
+PRO_TIER_NEIGHBORHOOD_SEARCHES=500
 ```
 
 ## Generating Secure Keys

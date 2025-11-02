@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     # Real Estate APIs
     ZILLOW_API_KEY: str = ""
     RAPIDAPI_KEY: str = ""
+    YELP_API_KEY: str = ""
+    
+    # AI Services - OpenAI (for NLP in Neighborhood Whisper)
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"  # Fast and cost-effective for NLP parsing
+    
+    # Google Cloud Vision (for VisionHome AI)
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""  # Path to service account JSON file
     
     # Marketing & Tours
     CANVA_API_KEY: str = ""
@@ -127,6 +135,14 @@ class Settings(BaseSettings):
     # Stripe
     STRIPE_API_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    
+    # Subscription Tier Limits
+    FREE_TIER_VISION_SCANS: int = 5  # Per month
+    FREE_TIER_NEIGHBORHOOD_SEARCHES: int = 10  # Per month
+    SOLO_TIER_VISION_SCANS: int = 50  # Per month
+    SOLO_TIER_NEIGHBORHOOD_SEARCHES: int = 100  # Per month
+    PRO_TIER_VISION_SCANS: int = 100  # Per month (or unlimited)
+    PRO_TIER_NEIGHBORHOOD_SEARCHES: int = 500  # Per month (or unlimited)
     
     @property
     def cors_origins_list(self) -> List[str]:

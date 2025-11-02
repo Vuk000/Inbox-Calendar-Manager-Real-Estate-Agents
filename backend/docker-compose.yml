@@ -36,6 +36,30 @@ services:
       timeout: 5s
       retries: 5
   
+  # Backend API (optional - for containerized deployment)
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: realinbox_backend
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   environment:
+  #     - DATABASE_URL=postgresql://realinbox_user:realinbox_password@postgres:5432/realinbox_db
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - GOOGLE_APPLICATION_CREDENTIALS=/app/config/google-vision-key.json
+  #   volumes:
+  #     - ./app:/app/app
+  #     # Mount Google Cloud Vision service account JSON key
+  #     # Create this file locally: google-vision-key.json
+  #     # Get it from Google Cloud Console > IAM & Admin > Service Accounts
+  #     - ./config/google-vision-key.json:/app/config/google-vision-key.json:ro
+  #   env_file:
+  #     - .env
+  
   # Celery Worker (for background tasks)
   # celery_worker:
   #   build: .
@@ -47,8 +71,11 @@ services:
   #   environment:
   #     - CELERY_BROKER_URL=redis://redis:6379/0
   #     - DATABASE_URL=postgresql://realinbox_user:realinbox_password@postgres:5432/realinbox_db
+  #     - GOOGLE_APPLICATION_CREDENTIALS=/app/config/google-vision-key.json
   #   volumes:
   #     - ./app:/app/app
+  #     # Mount Google Cloud Vision service account JSON key
+  #     - ./config/google-vision-key.json:/app/config/google-vision-key.json:ro
 
 volumes:
   postgres_data:
@@ -57,4 +84,13 @@ volumes:
 networks:
   default:
     name: realinbox_network
+
+# Instructions for Google Cloud Vision Setup:
+# 1. Create a service account in Google Cloud Console
+# 2. Download the JSON key file
+# 3. Save it as: config/google-vision-key.json (create config/ directory if needed)
+# 4. Set GOOGLE_APPLICATION_CREDENTIALS=/app/config/google-vision-key.json in environment
+# 5. Alternatively, use environment variable authentication (gcloud auth application-default login)
+#    when running locally outside Docker
+
 

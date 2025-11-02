@@ -16,9 +16,14 @@ redis==5.2.1  # Updated to match celery[redis] requirement
 
 # AI & ML
 anthropic==0.7.7
-# langchain==0.1.0  # Optional - requires numpy (compile on Python 3.13)
-# langchain-anthropic==0.1.0  # Optional - depends on langchain
+openai>=1.0.0  # For NLP in Neighborhood Whisper (GPT-4o-mini)
+langchain>=0.1.0  # For LangChain chains
+langchain-openai>=0.0.5  # OpenAI integration for LangChain
+langchain-anthropic>=0.1.0  # Anthropic integration for LangChain
 pinecone==7.3.0  # Updated from pinecone-client
+google-cloud-vision>=3.0.0  # Google Cloud Vision API for VisionHome AI
+scikit-learn>=1.3.0  # ML scoring and property matching
+numpy>=1.24.0  # Required for scikit-learn
 # tiktoken==0.5.2  # Optional - requires Rust compiler on Python 3.13
 # sentence-transformers==2.2.2  # Optional - requires numpy build on Python 3.13
 

@@ -11,6 +11,8 @@ import logging
 from ..db import SessionLocal
 from ..tasks.email_sync_task import process_email_with_ai, sync_gmail_account, sync_outlook_account
 from ..models.email_account import EmailAccount, EmailProvider
+from ..models.user import User, SubscriptionTier
+from ..config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -244,17 +246,26 @@ async def stripe_webhook(
             if event_type == 'checkout.session.completed':
                 # Handle successful checkout
                 user_id = data.get('metadata', {}).get('user_id')
-                tier = data.get('metadata', {}).get('tier')
+                tier_str = data.get('metadata', {}).get('tier')
                 subscription_id = data.get('subscription')
+                customer_id = data.get('customer')
                 
-                if user_id:
-                    from app.models.user import User, SubscriptionTier
+                if user_id and tier_str:
                     user = db.query(User).filter(User.id == int(user_id)).first()
                     if user:
-                        user.stripe_subscription_id = subscription_id
-                        user.subscription_tier = SubscriptionTier(tier)
+                        # Map tier string to SubscriptionTier enum
+                        tier = SubscriptionTier.from_simple_tier(tier_str)
+                        user.subscription_tier = tier
                         user.subscription_status = "active"
+                        user.stripe_subscription_id = subscription_id
+                        user.stripe_customer_id = customer_id
+                        
+                        # Set expiration (default 1 month from now)
+                        from datetime import datetime, timedelta
+                        user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+                        
                         db.commit()
+                        logger.info(f"Updated user {user_id} subscription to {tier.value}")
             
             elif event_type == 'customer.subscription.updated':
                 # Handle subscription updates
@@ -271,12 +282,12 @@ async def stripe_webhook(
                 # Handle subscription cancellation
                 subscription_id = data.get('id')
                 
-                from app.models.user import User, SubscriptionTier
                 user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
                 if user:
-                    user.subscription_status = "cancelled"
+                    user.subscription_status = "expired"
                     user.subscription_tier = SubscriptionTier.FREE_TRIAL
                     db.commit()
+                    logger.info(f"Subscription expired for user {user.id}")
             
             elif event_type == 'invoice.payment_failed':
                 # Handle failed payment

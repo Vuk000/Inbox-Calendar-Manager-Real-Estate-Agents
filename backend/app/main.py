@@ -65,8 +65,8 @@ limiter = Limiter(key_func=get_remote_address)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Production-grade Real Estate CRM with AI-powered inbox management, transaction pipeline, and lead generation",
-    version="2.0.0",
+    description="RealInbox AI Pro - Enterprise-grade AI inbox manager for real estate agents with VisionHome AI (computer vision property scans) and Neighborhood Whisper (NLP/ML neighborhood fit scores)",
+    version="3.0.0",
     docs_url=f"/api/{settings.API_VERSION}/docs",
     redoc_url=f"/api/{settings.API_VERSION}/redoc",
     lifespan=lifespan
@@ -140,7 +140,9 @@ from .routers import (
     auth, emails, drafts, tasks, analytics, properties, integrations,
     webhooks, payments, privacy, metrics, health, websocket as ws_router,
     # New Project Apex routers
-    contacts, teams, ai_actions, communications, transactions
+    contacts, teams, ai_actions, communications, transactions,
+    # VisionHome AI & Neighborhood Whisper routers
+    vision, neighborhood, subscription, calendar
 )
 
 app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
@@ -163,6 +165,12 @@ app.include_router(teams.router, prefix=f"/api/{settings.API_VERSION}", tags=["C
 app.include_router(ai_actions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - AI Actions"])
 app.include_router(communications.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Communications"])
 app.include_router(transactions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Transactions"])
+
+# VisionHome AI & Neighborhood Whisper routers
+app.include_router(vision.router, prefix=f"/api/{settings.API_VERSION}", tags=["VisionHome AI"])
+app.include_router(neighborhood.router, prefix=f"/api/{settings.API_VERSION}", tags=["Neighborhood Whisper"])
+app.include_router(subscription.router, prefix=f"/api/{settings.API_VERSION}", tags=["Subscription"])
+app.include_router(calendar.router, prefix=f"/api/{settings.API_VERSION}", tags=["Calendar"])
 
 
 if __name__ == "__main__":

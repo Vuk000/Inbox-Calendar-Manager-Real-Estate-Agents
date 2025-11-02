@@ -21,6 +21,46 @@ class SubscriptionTier(str, enum.Enum):
     PRO_AGENT = "pro_agent"
     TEAM_BROKERAGE = "team_brokerage"
     ENTERPRISE = "enterprise"
+    
+    @classmethod
+    def to_simple_tier(cls, tier: "SubscriptionTier") -> str:
+        """
+        Map subscription tier to simple tier string for API compatibility.
+        
+        Maps:
+        - FREE_TRIAL -> 'free'
+        - SOLO_AGENT -> 'solo'
+        - PRO_AGENT -> 'pro'
+        - TEAM_BROKERAGE -> 'team'
+        - ENTERPRISE -> 'team'
+        """
+        mapping = {
+            cls.FREE_TRIAL: "free",
+            cls.SOLO_AGENT: "solo",
+            cls.PRO_AGENT: "pro",
+            cls.TEAM_BROKERAGE: "team",
+            cls.ENTERPRISE: "team"
+        }
+        return mapping.get(tier, "free")
+    
+    @classmethod
+    def from_simple_tier(cls, simple_tier: str) -> "SubscriptionTier":
+        """
+        Map simple tier string to SubscriptionTier enum.
+        
+        Maps:
+        - 'free' -> FREE_TRIAL
+        - 'solo' -> SOLO_AGENT
+        - 'pro' -> PRO_AGENT
+        - 'team' -> TEAM_BROKERAGE (default for team)
+        """
+        mapping = {
+            "free": cls.FREE_TRIAL,
+            "solo": cls.SOLO_AGENT,
+            "pro": cls.PRO_AGENT,
+            "team": cls.TEAM_BROKERAGE
+        }
+        return mapping.get(simple_tier.lower(), cls.FREE_TRIAL)
 
 
 class User(Base):
@@ -88,6 +128,23 @@ class User(Base):
     ai_actions = relationship("AIAction", back_populates="user")
     landing_pages = relationship("LandingPage", back_populates="user")
     
+    # VisionHome AI & Neighborhood Whisper relationships
+    vision_scans = relationship("VisionScan", back_populates="user", cascade="all, delete-orphan")
+    neighborhood_reports = relationship("NeighborhoodReport", back_populates="user", cascade="all, delete-orphan")
+    approval_queue_items = relationship("ApprovalQueue", foreign_keys="ApprovalQueue.user_id", back_populates="user")
+    
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
+    
+    def get_simple_tier(self) -> str:
+        """Get simple tier string for this user"""
+        return SubscriptionTier.to_simple_tier(self.subscription_tier)
+    
+    def is_premium_tier(self) -> bool:
+        """Check if user has premium tier (pro or team)"""
+        return self.subscription_tier in [
+            SubscriptionTier.PRO_AGENT,
+            SubscriptionTier.TEAM_BROKERAGE,
+            SubscriptionTier.ENTERPRISE
+        ]
 

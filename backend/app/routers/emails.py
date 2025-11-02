@@ -85,6 +85,7 @@ async def list_emails(
     search: Optional[str] = None,
     starred: Optional[bool] = None,
     archived: Optional[bool] = None,
+    enrich: bool = Query(False, description="Enrich emails with Vision/Neighborhood insights"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -97,6 +98,7 @@ async def list_emails(
     - **search**: Search in subject and sender
     - **starred**: Filter by starred status
     - **archived**: Filter by archived status
+    - **enrich**: If true, detect property queries and add Vision/Neighborhood insights
     """
     # Build query for email communications
     query = db.query(CommunicationLog).filter(
@@ -134,6 +136,35 @@ async def list_emails(
     # Pagination
     offset = (page - 1) * limit
     emails = query.offset(offset).limit(limit).all()
+    
+    # Enrich with Vision/Neighborhood insights if requested
+    if enrich:
+        from ..agents.triage_agent import TriageAgent
+        triage_agent = TriageAgent()
+        
+        enriched_results = []
+        for email in emails:
+            email_dict = {
+                "subject": email.subject or "",
+                "body": email.body or "",
+                "has_attachments": email.has_attachments,
+                "attachments": []
+            }
+            
+            # Detect property queries
+            queries = await triage_agent.detect_property_queries(email_dict)
+            
+            # Convert to dict and add enrichment
+            email_data = EmailListResponse.from_orm(email).dict()
+            email_data["enrichment"] = {
+                "vision_triggered": queries.get('vision_triggered', False),
+                "neighborhood_triggered": queries.get('neighborhood_triggered', False),
+                "property_address": queries.get('property_address'),
+                "neighborhood_query": queries.get('neighborhood_query')
+            }
+            enriched_results.append(email_data)
+        
+        return enriched_results
     
     return emails
 
@@ -278,6 +309,15 @@ async def get_email_stats(
         CommunicationLog.urgency_score >= 70
     ).count()
     
+    # Unread emails: not archived and not deleted
+    # Using archived/deleted status as proxy for read/unread status
+    unread = db.query(CommunicationLog).filter(
+        CommunicationLog.user_id == current_user.id,
+        CommunicationLog.communication_type == CommunicationType.EMAIL,
+        CommunicationLog.is_archived == False,
+        CommunicationLog.is_deleted == False
+    ).count()
+    
     today = db.query(CommunicationLog).filter(
         CommunicationLog.user_id == current_user.id,
         CommunicationLog.communication_type == CommunicationType.EMAIL,
@@ -293,6 +333,7 @@ async def get_email_stats(
     
     return {
         "total": total,
+        "unread": unread,
         "urgent": urgent,
         "today": today,
         "avg_sentiment": round(float(avg_sentiment), 2) if avg_sentiment else None

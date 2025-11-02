@@ -8,6 +8,7 @@ import json
 import re
 import logging
 from anthropic import Anthropic
+from openai import OpenAI
 
 from ..config import settings
 from ..shared.prompts import build_triage_prompt
@@ -39,6 +40,9 @@ class TriageAgent:
         """
         self.client = claude_client or Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = settings.ANTHROPIC_MODEL
+        
+        # Initialize OpenAI for property query detection
+        self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
         
     @cache_result(ttl=3600, prefix="triage")
     async def analyze_email(self, email_content: Dict[str, Any]) -> TriageResult:
@@ -214,4 +218,97 @@ class TriageAgent:
         pattern = r'\$\s*[\d,]+(?:\.\d{2})?'
         amounts = re.findall(pattern, text)
         return amounts[:10]  # Limit to 10
+    
+    async def detect_property_queries(
+        self,
+        email_content: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Detect if email contains property queries that should trigger Vision/Neighborhood workflows.
+        
+        Args:
+            email_content: Email data dictionary
+            
+        Returns:
+            Dict with detected workflow triggers:
+            - vision_triggered: bool (if image attachment detected or property scan requested)
+            - neighborhood_triggered: bool (if neighborhood query detected)
+            - property_address: Optional[str] (address if detected)
+            - neighborhood_query: Optional[str] (neighborhood query if detected)
+        """
+        result = {
+            'vision_triggered': False,
+            'neighborhood_triggered': False,
+            'property_address': None,
+            'neighborhood_query': None
+        }
+        
+        if not self.openai_client:
+            return result
+        
+        subject = email_content.get("subject", "")
+        body = email_content.get("body", "")
+        has_attachments = email_content.get("has_attachments", False)
+        attachments = email_content.get("attachments", [])
+        
+        # Check for image attachments
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+        has_images = any(
+            any(ext in att.get('filename', '').lower() for ext in image_extensions)
+            for att in attachments
+        )
+        
+        if has_images or has_attachments:
+            result['vision_triggered'] = True
+        
+        # Use OpenAI to detect property/neighborhood queries
+        try:
+            query_text = f"Subject: {subject}\n\nBody: {body}"
+            
+            detection_prompt = """Analyze this email and determine if it contains:
+1. Property image/scan requests (mentions of photos, images, property scans, home tours)
+2. Neighborhood queries (mentions of neighborhoods, areas, locations, "looking for area", "neighborhood info")
 
+Extract:
+- Property address if mentioned
+- Neighborhood query if mentioned
+
+Return JSON with keys: has_property_query (bool), has_neighborhood_query (bool), property_address (string or null), neighborhood_query (string or null).
+"""
+            
+            response = self.openai_client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": detection_prompt},
+                    {"role": "user", "content": query_text}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            detection = json.loads(response.choices[0].message.content)
+            
+            if detection.get('has_property_query') or detection.get('property_address'):
+                result['vision_triggered'] = True
+                result['property_address'] = detection.get('property_address')
+            
+            if detection.get('has_neighborhood_query'):
+                result['neighborhood_triggered'] = True
+                result['neighborhood_query'] = detection.get('neighborhood_query') or body[:200]
+                
+        except Exception as e:
+            logger.warning(f"Property query detection failed: {e}")
+            # Fallback: simple keyword detection
+            text = f"{subject} {body}".lower()
+            
+            vision_keywords = ['photo', 'image', 'picture', 'scan', 'tour', 'property image']
+            neighborhood_keywords = ['neighborhood', 'area', 'location', 'looking for', 'good area']
+            
+            if any(kw in text for kw in vision_keywords):
+                result['vision_triggered'] = True
+            
+            if any(kw in text for kw in neighborhood_keywords):
+                result['neighborhood_triggered'] = True
+                result['neighborhood_query'] = body[:200]
+        
+        return result

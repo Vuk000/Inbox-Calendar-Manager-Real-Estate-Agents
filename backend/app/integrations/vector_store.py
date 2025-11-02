@@ -1,5 +1,5 @@
 """
-Vector Store Integration - Pinecone for semantic email search
+Vector Store Integration - Pinecone for semantic email search and neighborhood indexing
 """
 from typing import List, Dict, Any, Optional
 import pinecone
@@ -12,24 +12,27 @@ from ..config import settings
 
 class VectorStore:
     """
-    Pinecone vector database integration for semantic email search.
-    Stores email embeddings for similarity search.
+    Pinecone vector database integration for semantic email search and neighborhood indexing.
+    Stores email embeddings and neighborhood review embeddings for similarity search.
     """
     
     def __init__(self):
         self.api_key = settings.PINECONE_API_KEY
         self.environment = settings.PINECONE_ENVIRONMENT
         self.index_name = settings.PINECONE_INDEX_NAME
+        self.neighborhood_index_name = f"{settings.PINECONE_INDEX_NAME}-neighborhoods"
         self.dimension = 1536  # For OpenAI embeddings (can adjust for Claude if needed)
         
         # Initialize Pinecone
         self.pc = Pinecone(api_key=self.api_key)
         
-        # Create index if not exists
+        # Create indexes if not exists
         self._ensure_index_exists()
+        self._ensure_neighborhood_index_exists()
         
-        # Get index
+        # Get indexes
         self.index = self.pc.Index(self.index_name)
+        self.neighborhood_index = self.pc.Index(self.neighborhood_index_name)
     
     def _ensure_index_exists(self):
         """Create Pinecone index if it doesn't exist"""
@@ -51,6 +54,25 @@ class VectorStore:
                 print(f"✅ Created Pinecone index: {self.index_name}")
         except Exception as e:
             print(f"⚠️ Pinecone index setup: {e}")
+    
+    def _ensure_neighborhood_index_exists(self):
+        """Create Pinecone neighborhood index if it doesn't exist"""
+        try:
+            existing_indexes = [idx.name for idx in self.pc.list_indexes()]
+            
+            if self.neighborhood_index_name not in existing_indexes:
+                self.pc.create_index(
+                    name=self.neighborhood_index_name,
+                    dimension=self.dimension,
+                    metric="cosine",
+                    spec=ServerlessSpec(
+                        cloud="aws",
+                        region=self.environment
+                    )
+                )
+                print(f"✅ Created Pinecone neighborhood index: {self.neighborhood_index_name}")
+        except Exception as e:
+            print(f"⚠️ Pinecone neighborhood index setup: {e}")
     
     def _generate_vector_id(self, message_id: str, user_id: int) -> str:
         """Generate unique vector ID"""
@@ -224,4 +246,96 @@ class VectorStore:
                 "success": False,
                 "error": str(e)
             }
-
+    
+    async def upsert_neighborhood_review(
+        self,
+        review_id: str,
+        location: str,
+        embedding: List[float],
+        metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Store neighborhood review embedding in vector database.
+        
+        Args:
+            review_id: Review ID
+            location: Location string (for filtering)
+            embedding: Vector embedding (1536 dimensions from OpenAI)
+            metadata: Review metadata (text, rating, sentiment, etc.)
+            
+        Returns:
+            Upsert result
+        """
+        try:
+            vector_id = hashlib.sha256(f"review:{review_id}:{location}".encode()).hexdigest()[:32]
+            
+            metadata["review_id"] = review_id
+            metadata["location"] = location
+            metadata["indexed_at"] = datetime.utcnow().isoformat()
+            
+            self.neighborhood_index.upsert(
+                vectors=[(vector_id, embedding, metadata)]
+            )
+            
+            return {
+                "success": True,
+                "vector_id": vector_id,
+                "review_id": review_id
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def search_similar_neighborhoods(
+        self,
+        query_embedding: List[float],
+        location: Optional[str] = None,
+        top_k: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Search for similar neighborhoods using review embeddings.
+        
+        Args:
+            query_embedding: Query vector embedding
+            location: Optional location filter
+            top_k: Number of results to return
+            
+        Returns:
+            List of similar neighborhoods with scores
+        """
+        try:
+            filter_dict = {}
+            if location:
+                filter_dict["location"] = location
+            
+            results = self.neighborhood_index.query(
+                vector=query_embedding,
+                top_k=top_k,
+                include_metadata=True,
+                filter=filter_dict if filter_dict else None
+            )
+            
+            matches = []
+            for match in results.get("matches", []):
+                matches.append({
+                    "review_id": match.metadata.get("review_id"),
+                    "location": match.metadata.get("location"),
+                    "score": match.score,
+                    "text": match.metadata.get("text"),
+                    "rating": match.metadata.get("rating"),
+                    "metadata": match.metadata
+                })
+            
+            return {
+                "success": True,
+                "matches": matches,
+                "count": len(matches)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "matches": []
+            }
