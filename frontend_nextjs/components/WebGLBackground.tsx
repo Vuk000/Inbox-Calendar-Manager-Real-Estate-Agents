@@ -2,7 +2,7 @@
 
 import { useRef, useMemo, useEffect, Suspense, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Points, PointMaterial } from '@react-three/drei';
+import { Points, PointMaterial, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion } from 'framer-motion';
 
@@ -210,6 +210,72 @@ function EnhancedGradientPlane() {
   );
 }
 
+function NeonLineGrid() {
+  const linesRef = useRef<THREE.Group>(null);
+  const lineCount = 10;
+  const lineLength = 10;
+
+  const linePoints = useMemo(() => {
+    const points: THREE.Vector3[][] = [];
+    for (let i = 0; i < lineCount; i++) {
+      const x = (i / lineCount - 0.5) * 20;
+      points.push([
+        new THREE.Vector3(x, -lineLength / 2, -3),
+        new THREE.Vector3(x, lineLength / 2, -3),
+      ]);
+      points.push([
+        new THREE.Vector3(-lineLength / 2, x, -3),
+        new THREE.Vector3(lineLength / 2, x, -3),
+      ]);
+    }
+    return points;
+  }, []);
+
+  useFrame((state) => {
+    if (linesRef.current) {
+      linesRef.current.rotation.z += 0.001;
+    }
+  });
+
+  return (
+    <group ref={linesRef}>
+      {linePoints.map((points, i) => (
+        <line key={i} points={points}>
+          <lineBasicMaterial color="#00FFFF" transparent opacity={0.3} />
+        </line>
+      ))}
+    </group>
+  );
+}
+
+function FloatingOrbs() {
+  const orbPositions = useMemo(() => [
+    [5, 3, -2],
+    [-5, -3, -2],
+    [0, 5, -3],
+    [-3, 0, -2],
+  ] as [number, number, number][], []);
+
+  return (
+    <>
+      {orbPositions.map((pos, i) => (
+        <Float key={i} speed={1.5 + i * 0.5} rotationIntensity={0.5} floatIntensity={0.5}>
+          <mesh position={pos}>
+            <sphereGeometry args={[0.3, 16, 16]} />
+            <meshStandardMaterial
+              color={i % 2 === 0 ? '#00FFFF' : '#FF00FF'}
+              emissive={i % 2 === 0 ? '#00FFFF' : '#FF00FF'}
+              emissiveIntensity={1}
+              metalness={0.8}
+              roughness={0.2}
+            />
+          </mesh>
+        </Float>
+      ))}
+    </>
+  );
+}
+
 export default function WebGLBackground() {
   const mouseRef = useRef<[number, number]>([0, 0]);
   const throttledMouseRef = useRef<[number, number]>([0, 0]);
@@ -242,7 +308,7 @@ export default function WebGLBackground() {
       animate={{ opacity: 1 }}
       transition={{ duration: 1 }}
     >
-      <Suspense fallback={<div className="absolute inset-0 bg-dark-purple" />}>
+      <Suspense fallback={<div className="absolute inset-0 bg-dark-bg" />}>
         <Canvas
           camera={{ position: [0, 0, 5], fov: 75 }}
           gl={{ 
@@ -260,9 +326,19 @@ export default function WebGLBackground() {
           <pointLight position={[10, 10, 10]} color="#00FFFF" intensity={1} />
           <pointLight position={[-10, -10, -10]} color="#FF00FF" intensity={1} />
           
-          {/* Multiple particle systems */}
-          <ParticleSystem mouse={throttledMouseRef.current} count={2000} color="#00FFFF" speed={1} />
-          <ParticleSystem mouse={throttledMouseRef.current} count={1500} color="#FF00FF" speed={0.7} />
+          {/* Multiple particle systems - adaptive count based on device */}
+          <ParticleSystem 
+            mouse={throttledMouseRef.current} 
+            count={typeof window !== 'undefined' && window.innerWidth < 768 ? 500 : 2000} 
+            color="#00FFFF" 
+            speed={1} 
+          />
+          <ParticleSystem 
+            mouse={throttledMouseRef.current} 
+            count={typeof window !== 'undefined' && window.innerWidth < 768 ? 300 : 1500} 
+            color="#FF00FF" 
+            speed={0.7} 
+          />
           
           {/* Mouse trail */}
           <MouseTrail />
@@ -275,6 +351,12 @@ export default function WebGLBackground() {
           
           {/* Enhanced gradient plane */}
           <EnhancedGradientPlane />
+          
+          {/* Neon line grid */}
+          <NeonLineGrid />
+          
+          {/* Floating orbs */}
+          <FloatingOrbs />
         </Canvas>
       </Suspense>
     </motion.div>

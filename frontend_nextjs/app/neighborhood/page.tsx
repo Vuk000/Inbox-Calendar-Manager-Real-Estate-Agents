@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { FitScoreChart } from '@/components/FitScoreChart';
@@ -55,7 +59,7 @@ export default function NeighborhoodPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -64,40 +68,43 @@ export default function NeighborhoodPage() {
           animate="visible"
           className="space-y-8"
         >
-          <div>
-            <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-              Neighborhood Whisper
-            </h1>
-            <p className="text-gray-400">AI-powered neighborhood fit scores and insights</p>
-          </div>
+          <ScrollReveal>
+            <div>
+              <h1 className="text-4xl font-orbitron font-bold mb-2">
+                <NeonText color="purple">Neighborhood Whisper</NeonText>
+              </h1>
+              <p className="text-gray-400">AI-powered neighborhood fit scores and insights</p>
+            </div>
+          </ScrollReveal>
 
-          <Card className="p-6">
-            <form onSubmit={handleSearch} className="space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <Input
-                    label="Search Neighborhood"
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="e.g., family-friendly neighborhood in Seattle"
-                    required
-                  />
+          <ScrollReveal delay={0.1}>
+            <HolographicCard glowColor="purple" className="p-6">
+              <form onSubmit={handleSearch} className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <Input
+                      label="Search Neighborhood"
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="e.g., family-friendly neighborhood in Seattle"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <NeonButton
+                      type="submit"
+                      glowColor="purple"
+                      disabled={searchMutation.isPending}
+                    >
+                      <Search className="w-5 h-5 mr-2" />
+                      {searchMutation.isPending ? 'Analyzing...' : 'Search'}
+                    </NeonButton>
+                  </div>
                 </div>
-                <div className="flex items-end">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={searchMutation.isPending}
-                    glow
-                  >
-                    <Search className="w-5 h-5 mr-2" />
-                    {searchMutation.isPending ? 'Analyzing...' : 'Search'}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </Card>
+              </form>
+            </HolographicCard>
+          </ScrollReveal>
 
           {/* Map Placeholder */}
           <Card className="p-6">

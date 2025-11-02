@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -324,11 +328,11 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className={cn("flex-1 p-4 md:p-8 transition-all duration-300", {
           "md:ml-64": !previewEmail,
-          "md:ml-64 md:mr-1/3": previewEmail, // Adjust margin when preview is open
+          "md:ml-64 md:mr-1/3": previewEmail,
         })}>
         <motion.div
           variants={fadeInUp}
@@ -338,8 +342,8 @@ export default function InboxPage() {
         >
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                Inbox
+              <h1 className="text-3xl sm:text-4xl font-orbitron font-bold mb-2">
+                <NeonText color="blue">Inbox</NeonText>
               </h1>
               <p className="text-gray-400 text-sm sm:text-base">AI-powered email management</p>
             </div>
@@ -368,26 +372,25 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <Card className="p-4">
+          <HolographicCard glowColor="blue" className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <Input
                   placeholder="Search emails..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  icon={<Search className="w-5 h-5 text-gray-400" />}
                 />
               </div>
               {searchQuery && (
-                <Button
-                  variant={useSemanticSearch ? 'primary' : 'ghost'}
+                <NeonButton
+                  glowColor={useSemanticSearch ? 'blue' : 'purple'}
                   size="sm"
                   onClick={() => setUseSemanticSearch(!useSemanticSearch)}
                   title="Toggle semantic search"
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
                   {useSemanticSearch ? 'Semantic' : 'Text'}
-                </Button>
+                </NeonButton>
               )}
               <div className="flex gap-2">
                 <Button
@@ -419,24 +422,24 @@ export default function InboxPage() {
                 {useSemanticSearch && ' (semantic search)'}
               </div>
             )}
-          </Card>
+          </HolographicCard>
 
           {/* Bulk Actions */}
           {selectedEmails.size > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-4 p-4 bg-neon-cyan/10 rounded-lg border border-neon-cyan/20"
+              className="flex items-center gap-4 p-4 bg-neon-cyan/10 rounded-lg border border-neon-cyan/20 neon-border"
             >
               <span className="text-neon-cyan font-medium">
                 {selectedEmails.size} selected
               </span>
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => handleBulkAction('archive')}>
+                <Button variant="ghost" size="sm" onClick={() => handleBulkAction('archive')} className="hover:bg-neon-cyan/20">
                   <Archive className="w-4 h-4 mr-2" />
                   Archive
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleBulkAction('delete')}>
+                <Button variant="ghost" size="sm" onClick={() => handleBulkAction('delete')} className="hover:bg-neon-pink/20">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
                 </Button>
@@ -479,21 +482,26 @@ export default function InboxPage() {
                     const isSummarizing = loadingSummaries.has(threadId);
 
                     return (
-                      <Card key={threadId} className="p-4 cursor-pointer hover:border-neon-cyan transition-colors">
-                        <div className="flex items-start gap-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSelectEmail(latestEmail.id);
-                            }}
-                            className="mt-1"
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-neon-cyan" />
-                            ) : (
-                              <Square className="w-4 h-4 text-gray-600" />
-                            )}
-                          </button>
+                      <motion.div
+                        key={threadId}
+                        whileHover={{ x: 4, scale: 1.01 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <HolographicCard glowColor="blue" className="p-4 cursor-pointer">
+                          <div className="flex items-start gap-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelectEmail(latestEmail.id);
+                              }}
+                              className="mt-1"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-neon-cyan" />
+                              ) : (
+                                <Square className="w-4 h-4 text-gray-600" />
+                              )}
+                            </button>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <button
@@ -604,8 +612,9 @@ export default function InboxPage() {
                               <Eye className="w-4 h-4" />
                             </Button>
                           </div>
-                        </div>
-                        {isExpanded && (
+                        </HolographicCard>
+                      </motion.div>
+                      {isExpanded && (
                           <div className="mt-4 pl-8 space-y-2 border-l-2 border-neon-cyan/20">
                             {threadEmails.slice(1).map((email, idx) => (
                               <motion.div

@@ -20,8 +20,9 @@ html {
 }
 
 body {
-  @apply bg-dark-purple text-white font-inter;
+  @apply bg-dark-bg text-gray-100 font-inter;
   overflow-x: hidden;
+  background-color: #0A001A;
 }
 
 /* Custom Scrollbar */
@@ -30,7 +31,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-dark-purple;
+  background: #0A001A;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -45,7 +46,8 @@ body {
 
 /* Selection */
 ::selection {
-  @apply bg-neon-cyan text-dark-purple;
+  background: #00FFFF;
+  color: #0A001A;
 }
 
 /* Neon Glow Animation */
@@ -66,7 +68,8 @@ body {
 
 /* Focus Styles */
 :focus-visible {
-  @apply outline-none ring-2 ring-neon-cyan ring-offset-2 ring-offset-dark-purple;
+  outline: none;
+  box-shadow: 0 0 0 2px #00FFFF, 0 0 0 4px rgba(0, 255, 255, 0.3);
 }
 
 /* Loading Spinner */
@@ -549,6 +552,110 @@ html {
     0 20px 60px rgba(102, 126, 234, 0.4),
     0 5px 15px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Cyberpunk Neon Utilities */
+.neon-border {
+  border: 1px solid #00FFFF;
+  box-shadow: 0 0 10px #00FFFF, inset 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.neon-border-purple {
+  border: 1px solid #A020F0;
+  box-shadow: 0 0 10px #A020F0, inset 0 0 10px rgba(160, 32, 240, 0.1);
+}
+
+.neon-border-pink {
+  border: 1px solid #FF00FF;
+  box-shadow: 0 0 10px #FF00FF, inset 0 0 10px rgba(255, 0, 255, 0.1);
+}
+
+.holographic-effect {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 255, 0.1) 0%,
+    rgba(160, 32, 240, 0.1) 50%,
+    rgba(255, 0, 255, 0.1) 100%
+  );
+  background-size: 200% 200%;
+  animation: holographic-sweep 3s ease infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.holographic-effect::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  animation: holographic-sweep 3s infinite;
+}
+
+@keyframes neon-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1) drop-shadow(0 0 10px #00FFFF);
+  }
+  50% {
+    opacity: 0.8;
+    filter: brightness(1.5) drop-shadow(0 0 20px #00FFFF);
+  }
+}
+
+@keyframes glow-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes holographic-distortion {
+  0%, 100% {
+    filter: hue-rotate(0deg) brightness(1);
+  }
+  50% {
+    filter: hue-rotate(90deg) brightness(1.2);
+  }
+}
+
+/* Cyberpunk Text Effects */
+.text-neon-blue {
+  color: #00FFFF;
+  text-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF, 0 0 30px #00FFFF;
+}
+
+.text-neon-purple {
+  color: #A020F0;
+  text-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0;
+}
+
+.text-neon-pink {
+  color: #FF00FF;
+  text-shadow: 0 0 10px #FF00FF, 0 0 20px #FF00FF, 0 0 30px #FF00FF;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 

@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { useAPI } from '@/lib/hooks/useAPI';
 import { analyticsAPI } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
@@ -83,7 +87,7 @@ export default function AnalyticsPage() {
   })) || defaultSourceData;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -92,80 +96,89 @@ export default function AnalyticsPage() {
           animate="visible"
           className="space-y-6"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                Analytics
-              </h1>
-              <p className="text-gray-400">Track your productivity and insights</p>
+          <ScrollReveal>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-orbitron font-bold mb-2">
+                  <NeonText color="blue">Analytics</NeonText>
+                </h1>
+                <p className="text-gray-400">Track your productivity and insights</p>
+              </div>
+              <div className="flex gap-4">
+                <Select
+                  options={[
+                    { value: '7d', label: 'Last 7 days' },
+                    { value: '30d', label: 'Last 30 days' },
+                    { value: '90d', label: 'Last 90 days' },
+                    { value: '1y', label: 'Last year' },
+                  ]}
+                  value={timeframe}
+                  onChange={(value) => setTimeframe(value)}
+                  placeholder="Select timeframe"
+                />
+                <NeonButton glowColor="purple">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </NeonButton>
+              </div>
             </div>
-            <div className="flex gap-4">
-              <Select
-                options={[
-                  { value: '7d', label: 'Last 7 days' },
-                  { value: '30d', label: 'Last 30 days' },
-                  { value: '90d', label: 'Last 90 days' },
-                  { value: '1y', label: 'Last year' },
-                ]}
-                value={timeframe}
-                onChange={(value) => setTimeframe(value)}
-                placeholder="Select timeframe"
-              />
-              <Button variant="secondary">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </div>
-          </div>
+          </ScrollReveal>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <Mail className="w-8 h-8 text-neon-cyan" />
-                <Badge variant="success">+12%</Badge>
-              </div>
-              <p className="text-sm text-gray-400 mb-1">Total Emails</p>
-              <AnimatedCounter
-                value={metrics?.emails_processed_today || 0}
-                className="text-3xl font-orbitron font-bold text-neon-cyan"
-              />
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <Calendar className="w-8 h-8 text-neon-pink" />
-                <Badge variant="success">+8%</Badge>
-              </div>
-              <p className="text-sm text-gray-400 mb-1">Events Created</p>
-              <AnimatedCounter
-                value={metrics?.tasks_completed || 0}
-                className="text-3xl font-orbitron font-bold text-neon-pink"
-              />
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <Sparkles className="w-8 h-8 text-neon-purple" />
-                <Badge variant="info">AI</Badge>
-              </div>
-              <p className="text-sm text-gray-400 mb-1">AI Actions</p>
-              <AnimatedCounter
-                value={metrics?.drafts_generated || 0}
-                className="text-3xl font-orbitron font-bold text-neon-purple"
-              />
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <TrendingUp className="w-8 h-8 text-green-400" />
-                <Badge variant="neon">Best</Badge>
-              </div>
-              <p className="text-sm text-gray-400 mb-1">Time Saved</p>
-              <AnimatedCounter
-                value={metrics?.time_saved_hours || 53}
-                suffix="h"
-                className="text-3xl font-orbitron font-bold text-green-400"
-              />
-            </Card>
+            <ScrollReveal delay={0.1}>
+              <HolographicCard glowColor="blue" className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <Mail className="w-8 h-8 text-neon-cyan" />
+                  <Badge variant="success">+12%</Badge>
+                </div>
+                <p className="text-sm text-gray-400 mb-1">Total Emails</p>
+                <AnimatedCounter
+                  value={metrics?.emails_processed_today || 0}
+                  className="text-3xl font-orbitron font-bold text-neon-cyan"
+                />
+              </HolographicCard>
+            </ScrollReveal>
+            <ScrollReveal delay={0.2}>
+              <HolographicCard glowColor="pink" className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <Calendar className="w-8 h-8 text-neon-pink" />
+                  <Badge variant="success">+8%</Badge>
+                </div>
+                <p className="text-sm text-gray-400 mb-1">Events Created</p>
+                <AnimatedCounter
+                  value={metrics?.tasks_completed || 0}
+                  className="text-3xl font-orbitron font-bold text-neon-pink"
+                />
+              </HolographicCard>
+            </ScrollReveal>
+            <ScrollReveal delay={0.3}>
+              <HolographicCard glowColor="purple" className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <Sparkles className="w-8 h-8 text-neon-purple" />
+                  <Badge variant="info">AI</Badge>
+                </div>
+                <p className="text-sm text-gray-400 mb-1">AI Actions</p>
+                <AnimatedCounter
+                  value={metrics?.drafts_generated || 0}
+                  className="text-3xl font-orbitron font-bold text-neon-purple"
+                />
+              </HolographicCard>
+            </ScrollReveal>
+            <ScrollReveal delay={0.4}>
+              <HolographicCard glowColor="blue" className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <TrendingUp className="w-8 h-8 text-green-400" />
+                  <Badge variant="neon">Best</Badge>
+                </div>
+                <p className="text-sm text-gray-400 mb-1">Time Saved</p>
+                <AnimatedCounter
+                  value={metrics?.time_saved_hours || 53}
+                  suffix="h"
+                  className="text-3xl font-orbitron font-bold text-green-400"
+                />
+              </HolographicCard>
+            </ScrollReveal>
           </div>
 
           {/* Tabs for different views */}
@@ -233,7 +246,7 @@ export default function AnalyticsPage() {
             </TabsContent>
 
                 <TabsContent value="insights">
-                  <Card className="p-6 mt-6">
+                  <HolographicCard glowColor="blue" className="p-6 mt-6">
                     <h3 className="text-xl font-orbitron text-neon-cyan mb-4">AI-Generated Insights</h3>
                     <div className="space-y-4">
                       {metrics?.urgent_emails?.length > 0 ? (

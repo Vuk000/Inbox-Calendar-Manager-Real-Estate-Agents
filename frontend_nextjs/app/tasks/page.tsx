@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -253,7 +257,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -262,18 +266,20 @@ export default function TasksPage() {
           animate="visible"
           className="space-y-6"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                Tasks
-              </h1>
-              <p className="text-gray-400">Kanban board for task management</p>
+          <ScrollReveal>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-4xl font-orbitron font-bold mb-2">
+                  <NeonText color="pink">Tasks</NeonText>
+                </h1>
+                <p className="text-gray-400">Kanban board for task management</p>
+              </div>
+              <NeonButton onClick={() => setIsCreating(true)} glowColor="pink">
+                <Plus className="w-4 h-4 mr-2" />
+                New Task
+              </NeonButton>
             </div>
-            <Button variant="primary" onClick={() => setIsCreating(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Task
-            </Button>
-          </div>
+          </ScrollReveal>
 
           {/* Search and Filters */}
           <Card className="p-4">

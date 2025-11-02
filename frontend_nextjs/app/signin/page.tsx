@@ -7,6 +7,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
+import { NeonText } from '@/components/cyberpunk/NeonText';
 import { Mail, Lock, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -42,14 +45,14 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen gradient-premium-subtle flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background gradient */}
-      <div className="absolute inset-0 gradient-animated opacity-20"></div>
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Cyberpunk Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/10 via-neon-purple/10 to-neon-pink/10 opacity-50"></div>
       
       <div className="w-full max-w-md relative z-10 animate-fade-in-up">
         <Link 
           href="/" 
-          className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-premium mb-6 group"
+          className="inline-flex items-center gap-2 text-gray-300 hover:text-neon-cyan transition-premium mb-6 group"
         >
           <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           <span className="font-medium">Return to Home</span>
@@ -57,23 +60,25 @@ export default function SignInPage() {
         
         <div className="text-center mb-8 animate-fade-in-down">
           <Link href="/" className="inline-flex items-center gap-2 mb-4 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-premium group-hover:scale-110 transition-premium">
-              <Mail className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-neon-cyan to-neon-purple rounded-lg flex items-center justify-center shadow-neon-glow-blue group-hover:scale-110 transition-premium">
+              <Mail className="w-6 h-6 text-dark-bg" />
             </div>
-            <span className="text-2xl font-semibold text-gray-900">RealInbox AI Pro</span>
+            <span className="text-2xl font-semibold text-neon-cyan font-orbitron neon-glow">RealInbox AI Pro</span>
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your account to continue</p>
+          <h1 className="text-3xl font-bold mb-2 font-orbitron">
+            <NeonText color="blue">Welcome Back</NeonText>
+          </h1>
+          <p className="text-gray-400">Sign in to your account to continue</p>
         </div>
 
-        <Card glass className="p-8 shadow-premium-xl animate-scale-in">
+        <HolographicCard glowColor="blue" className="p-8 shadow-premium-xl animate-scale-in">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <Input
                   id="email"
                   type="email"
@@ -88,11 +93,11 @@ export default function SignInPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -106,7 +111,7 @@ export default function SignInPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-neon-cyan"
                 >
                   {showPassword ? (
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,7 +150,7 @@ export default function SignInPage() {
               </Link>
             </p>
           </div>
-        </Card>
+          </HolographicCard>
       </div>
     </div>
   );

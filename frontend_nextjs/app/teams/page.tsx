@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input, Textarea } from '@/components/ui/input';
@@ -259,7 +263,7 @@ export default function TeamsPage() {
   const isOwner = team && user && team.owner_id === user.id;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -268,23 +272,25 @@ export default function TeamsPage() {
           animate="visible"
           className="space-y-6"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                Teams
-              </h1>
-              <p className="text-gray-400">Manage your team and collaboration</p>
+          <ScrollReveal>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-orbitron font-bold mb-2">
+                  <NeonText color="purple">Teams</NeonText>
+                </h1>
+                <p className="text-gray-400">Manage your team and collaboration</p>
+              </div>
+              {!team && (
+                <NeonButton
+                  glowColor="purple"
+                  onClick={() => setIsCreatingTeam(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Team
+                </NeonButton>
+              )}
             </div>
-            {!team && (
-              <Button
-                variant="primary"
-                onClick={() => setIsCreatingTeam(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Team
-              </Button>
-            )}
-          </div>
+          </ScrollReveal>
 
           {!teamId && !team && (
             <Card className="p-12 text-center">

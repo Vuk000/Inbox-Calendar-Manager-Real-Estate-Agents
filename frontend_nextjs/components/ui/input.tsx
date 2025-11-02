@@ -59,15 +59,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={isPassword && showPassword ? 'text' : type}
             className={cn(
-              'w-full px-4 py-2 bg-white dark:bg-dark-purple/50 border rounded-lg',
-              'text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500',
-              'focus:outline-none focus:ring-2 focus:ring-offset-2',
+              'w-full px-4 py-2 bg-dark-bg/50 border rounded-lg backdrop-blur-sm',
+              'text-gray-100 placeholder:text-gray-500',
+              'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-bg',
               'transition-all duration-300',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              focused && !error && 'border-blue-500 dark:border-neon-cyan focus:ring-blue-500/50 dark:focus:ring-neon-cyan/50',
+              focused && !error && 'border-neon-cyan focus:ring-neon-cyan/50 shadow-neon-glow-blue',
               error && 'border-red-500 focus:border-red-500 focus:ring-red-500/50',
               success && !error && 'border-green-500 focus:border-green-500 focus:ring-green-500/50',
-              !focused && !error && !success && 'border-gray-300 dark:border-neon-cyan/30',
+              !focused && !error && !success && 'border-neon-cyan/30',
               isPassword && 'pr-10',
               className
             )}

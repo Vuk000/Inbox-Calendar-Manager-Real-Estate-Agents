@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import WebGLBackground from '@/components/WebGLBackground';
+import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { WebSocketConnectionIndicator } from '@/components/WebSocketIndicator';
@@ -42,7 +43,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {!isAuthPage && !isLandingPage && <WebGLBackground />}
+      {!isAuthPage && <WebGLBackground />}
       {!isAuthPage && !isLandingPage && <Header />}
       <PageTransition>
         <main className="min-h-screen">
@@ -62,29 +63,29 @@ function LayoutContent({ children }: { children: ReactNode }) {
         position="top-right"
         toastOptions={{
           style: {
-            background: isAuthPage || isLandingPage ? '#fff' : '#1A0033',
-            color: isAuthPage || isLandingPage ? '#111827' : '#00FFFF',
-            border: isAuthPage || isLandingPage ? '1px solid #e5e7eb' : '1px solid #00FFFF',
-            boxShadow: isAuthPage || isLandingPage 
+            background: isAuthPage ? '#fff' : '#0A001A',
+            color: isAuthPage ? '#111827' : '#00FFFF',
+            border: isAuthPage ? '1px solid #e5e7eb' : '1px solid #00FFFF',
+            boxShadow: isAuthPage 
               ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
               : '0 0 10px rgba(0, 255, 255, 0.5)',
           },
           success: {
             iconTheme: {
-              primary: isAuthPage || isLandingPage ? '#10b981' : '#00FFFF',
-              secondary: isAuthPage || isLandingPage ? '#fff' : '#1A0033',
+              primary: isAuthPage ? '#10b981' : '#00FFFF',
+              secondary: isAuthPage ? '#fff' : '#0A001A',
             },
           },
           error: {
             iconTheme: {
-              primary: isAuthPage || isLandingPage ? '#ef4444' : '#FF00FF',
-              secondary: isAuthPage || isLandingPage ? '#fff' : '#1A0033',
+              primary: isAuthPage ? '#ef4444' : '#FF00FF',
+              secondary: isAuthPage ? '#fff' : '#0A001A',
             },
           },
           loading: {
             iconTheme: {
-              primary: isAuthPage || isLandingPage ? '#3b82f6' : '#00FFFF',
-              secondary: isAuthPage || isLandingPage ? '#fff' : '#1A0033',
+              primary: isAuthPage ? '#3b82f6' : '#00FFFF',
+              secondary: isAuthPage ? '#fff' : '#0A001A',
             },
           },
         }}

@@ -13,6 +13,10 @@ import {
 import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { TextReveal } from '@/components/TextReveal';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
+import { NeonText } from '@/components/cyberpunk/NeonText';
 import { useRef } from 'react';
 
 export default function LandingPage() {
@@ -240,16 +244,15 @@ export default function LandingPage() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
 
   return (
-    <div className="min-h-screen bg-white relative overflow-hidden">
-      {/* Subtle background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-b from-gray-50 via-white to-gray-50 pointer-events-none z-0"></div>
+    <div className="min-h-screen bg-dark-bg relative overflow-hidden">
+      {/* Cyberpunk Background is handled by WebGLBackground in layout */}
       
       {/* Header */}
       <motion.header 
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
-        className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm"
+        className="sticky top-0 z-50 bg-dark-bg/80 backdrop-blur-md border-b border-neon-cyan/20"
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -258,26 +261,26 @@ export default function LandingPage() {
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-                <Mail className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 bg-gradient-to-br from-neon-cyan to-neon-purple rounded-lg flex items-center justify-center shadow-neon-glow-blue">
+                <Mail className="w-5 h-5 text-dark-bg" />
               </div>
-              <span className="text-xl font-semibold text-gray-900">RealInbox AI Pro</span>
+              <span className="text-xl font-semibold text-neon-cyan font-orbitron neon-glow">RealInbox AI Pro</span>
             </motion.div>
             <div className="flex items-center gap-4">
-              {isAuthenticated ? (
-                <Button onClick={() => router.push('/dashboard')} variant="default">
-                  Go to Dashboard
-                </Button>
-              ) : (
-                <>
-                  <Link href="/signin">
-                    <Button variant="ghost">Sign In</Button>
-                  </Link>
-                  <Link href="/signup">
-                    <Button>Get Started</Button>
-                  </Link>
-                </>
-              )}
+            {isAuthenticated ? (
+              <Button onClick={() => router.push('/dashboard')} variant="default" className="neon-border hover:shadow-neon-glow-blue">
+                Go to Dashboard
+              </Button>
+            ) : (
+              <>
+                <Link href="/signin">
+                  <Button variant="ghost" className="text-gray-300 hover:text-neon-cyan">Sign In</Button>
+                </Link>
+                <Link href="/signup">
+                  <NeonButton>Get Started</NeonButton>
+                </Link>
+              </>
+            )}
             </div>
           </div>
         </div>
@@ -285,70 +288,70 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section ref={heroRef} className="container mx-auto px-4 py-20 md:py-32 relative z-10">
-        <motion.div 
-          className="max-w-5xl mx-auto text-center"
-          style={{ y: heroY, opacity: heroOpacity }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8 }}
-            className="mb-6"
-          >
-            <span className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
-              <Sparkles className="w-4 h-4" />
-              Powered by Claude Sonnet 4.5 AI
-            </span>
-          </motion.div>
-          
-          <motion.h1 
-            className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-          >
-            Stop Drowning in Email Chaos
-            <span className="block text-blue-600 mt-4">
-              Start Closing More Deals
-            </span>
-          </motion.h1>
-          
-          <TextReveal delay={0.4}>
-            <p className="text-xl md:text-2xl text-gray-600 mb-4 max-w-3xl mx-auto font-medium">
-              The all-in-one AI platform that automates your inbox, qualifies leads, drafts responses, 
-              and manages your entire real estate business. Save 10+ hours per week.
-            </p>
-          </TextReveal>
-          
-          <TextReveal delay={0.6}>
-            <p className="text-lg text-gray-500 mb-8 max-w-2xl mx-auto">
-              Used by 500+ real estate professionals. Trusted by top producers and teams nationwide.
-            </p>
-          </TextReveal>
-          
           <motion.div 
-            className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8, duration: 0.8 }}
+            className="max-w-5xl mx-auto text-center"
+            style={{ y: heroY, opacity: heroOpacity }}
           >
-            {!isAuthenticated && (
-              <>
-                <Link href="/signup">
-                  <Button size="lg" className="w-full sm:w-auto text-lg px-8 py-6 shadow-lg">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                </Link>
-                <Link href="/signin">
-                  <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-6">
-                    Watch Demo
-                    <Play className="ml-2 w-5 h-5" />
-                  </Button>
-                </Link>
-              </>
-            )}
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+              className="mb-6"
+            >
+              <span className="inline-flex items-center gap-2 px-4 py-2 bg-neon-cyan/10 text-neon-cyan rounded-full text-sm font-medium border border-neon-cyan/30 neon-border">
+                <Sparkles className="w-4 h-4" />
+                Powered by Claude Sonnet 4.5 AI
+              </span>
+            </motion.div>
+            
+            <motion.h1 
+              className="text-5xl md:text-7xl font-bold mb-6 leading-tight font-orbitron"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.8 }}
+            >
+              <NeonText color="blue" className="block mb-4">Stop Drowning in Email Chaos</NeonText>
+              <span className="block text-neon-purple mt-4 neon-glow">
+                Start Closing More Deals
+              </span>
+            </motion.h1>
+            
+            <TextReveal delay={0.4}>
+              <p className="text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto font-medium">
+                The all-in-one AI platform that automates your inbox, qualifies leads, drafts responses, 
+                and manages your entire real estate business. Save 10+ hours per week.
+              </p>
+            </TextReveal>
+            
+            <TextReveal delay={0.6}>
+              <p className="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+                Used by 500+ real estate professionals. Trusted by top producers and teams nationwide.
+              </p>
+            </TextReveal>
+            
+            <motion.div 
+              className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8, duration: 0.8 }}
+            >
+              {!isAuthenticated && (
+                <>
+                  <Link href="/signup">
+                    <NeonButton size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
+                      Start Free Trial
+                      <ArrowRight className="ml-2 w-5 h-5" />
+                    </NeonButton>
+                  </Link>
+                  <Link href="/signin">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-6 border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10">
+                      Watch Demo
+                      <Play className="ml-2 w-5 h-5" />
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </motion.div>
 
           {/* Stats Bar */}
           <motion.div
@@ -360,15 +363,15 @@ export default function LandingPage() {
             {stats.map((stat, index) => {
               const Icon = stat.icon;
               return (
-                <Card key={index} className="p-6 bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <HolographicCard key={index} glowColor={index % 2 === 0 ? 'blue' : 'purple'} className="p-6">
                   <div className="flex items-center justify-center mb-3">
-                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 bg-neon-cyan/20 rounded-lg flex items-center justify-center border border-neon-cyan/30">
+                      <Icon className="w-5 h-5 text-neon-cyan" />
                     </div>
                   </div>
-                  <div className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</div>
-                  <div className="text-sm text-gray-600">{stat.label}</div>
-                </Card>
+                  <div className="text-3xl font-bold text-neon-cyan mb-1 font-orbitron">{stat.value}</div>
+                  <div className="text-sm text-gray-400">{stat.label}</div>
+                </HolographicCard>
               );
             })}
           </motion.div>
@@ -376,18 +379,18 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20 bg-gray-50 relative z-10">
+      <section className="py-20 bg-dark-bg/50 relative z-10 backdrop-blur-sm">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                How RealInbox AI Works
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="blue">How RealInbox AI Works</NeonText>
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
                 Three simple steps to transform your business
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
@@ -412,23 +415,18 @@ export default function LandingPage() {
             ].map((step, index) => {
               const Icon = step.icon;
               return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.2, duration: 0.6 }}
-                  className="relative"
-                >
-                  <Card className="p-8 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
-                    <div className="text-5xl font-bold text-blue-600 mb-4 opacity-20">{step.step}</div>
-                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
-                      <Icon className="w-6 h-6 text-white" />
+                <ScrollReveal key={index} delay={index * 0.2}>
+                  <HolographicCard glowColor={index === 1 ? 'purple' : 'blue'} className="p-8 h-full">
+                    <div className="text-6xl font-bold mb-4 font-orbitron">
+                      <NeonText color={index === 1 ? 'purple' : 'blue'}>{step.step}</NeonText>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
-                    <p className="text-gray-600">{step.description}</p>
-                  </Card>
-                </motion.div>
+                    <div className="w-12 h-12 bg-neon-cyan/20 rounded-lg flex items-center justify-center mb-4 border border-neon-cyan/30">
+                      <Icon className="w-6 h-6 text-neon-cyan" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-gray-100 font-orbitron">{step.title}</h3>
+                    <p className="text-gray-400">{step.description}</p>
+                  </HolographicCard>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -436,18 +434,18 @@ export default function LandingPage() {
       </section>
 
       {/* Core Features Section */}
-      <section className="py-20 bg-white relative z-10">
+      <section className="py-20 bg-dark-bg relative z-10">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                Everything You Need to Succeed
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="blue">Everything You Need to Succeed</NeonText>
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
                 12 powerful features designed specifically for real estate professionals
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <motion.div 
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
@@ -465,21 +463,24 @@ export default function LandingPage() {
                   whileHover={{ y: -5 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Card className="p-6 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-all">
-                    <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-4">
-                      <Icon className="w-6 h-6 text-blue-600" />
+                  <HolographicCard 
+                    glowColor={index % 3 === 0 ? 'blue' : index % 3 === 1 ? 'purple' : 'pink'}
+                    className="p-6 h-full"
+                  >
+                    <div className="w-12 h-12 bg-neon-cyan/20 rounded-lg flex items-center justify-center mb-4 border border-neon-cyan/30">
+                      <Icon className="w-6 h-6 text-neon-cyan" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
-                    <p className="text-gray-600 mb-4">{feature.description}</p>
+                    <h3 className="text-xl font-bold mb-2 text-gray-100 font-orbitron">{feature.title}</h3>
+                    <p className="text-gray-400 mb-4">{feature.description}</p>
                     <div className="space-y-2">
                       {feature.benefits.map((benefit, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <div key={i} className="flex items-center gap-2 text-sm text-gray-400">
+                          <CheckCircle2 className="w-4 h-4 text-neon-cyan flex-shrink-0" />
                           <span>{benefit}</span>
                         </div>
                       ))}
                     </div>
-                  </Card>
+                  </HolographicCard>
                 </motion.div>
               );
             })}
@@ -488,42 +489,36 @@ export default function LandingPage() {
       </section>
 
       {/* Use Cases Section */}
-      <section className="py-20 bg-gray-50 relative z-10">
+      <section className="py-20 bg-dark-bg/50 relative z-10 backdrop-blur-sm">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                Real-World Use Cases
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="purple">Real-World Use Cases</NeonText>
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
                 See how RealInbox AI solves real problems for real estate professionals
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
             {useCases.map((useCase, index) => {
               const Icon = useCase.icon;
               return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: index % 2 === 0 ? -30 : 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.6 }}
-                >
-                  <Card className="p-8 bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
+                <ScrollReveal key={index} delay={index * 0.2}>
+                  <HolographicCard glowColor={index % 2 === 0 ? 'blue' : 'pink'} className="p-8">
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-6 h-6 text-white" />
+                      <div className="w-12 h-12 bg-neon-cyan/20 rounded-lg flex items-center justify-center flex-shrink-0 border border-neon-cyan/30">
+                        <Icon className="w-6 h-6 text-neon-cyan" />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">{useCase.title}</h3>
-                        <p className="text-gray-600">{useCase.description}</p>
+                        <h3 className="text-xl font-bold mb-2 text-gray-100 font-orbitron">{useCase.title}</h3>
+                        <p className="text-gray-400">{useCase.description}</p>
                       </div>
                     </div>
-                  </Card>
-                </motion.div>
+                  </HolographicCard>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -531,38 +526,32 @@ export default function LandingPage() {
       </section>
 
       {/* Advanced Features Section */}
-      <section className="py-20 bg-white relative z-10">
+      <section className="py-20 bg-dark-bg relative z-10">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                Enterprise-Grade Features
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="blue">Enterprise-Grade Features</NeonText>
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
                 Built for scale, security, and performance
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {advancedFeatures.map((feature, index) => {
               const Icon = feature.icon;
               return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1, duration: 0.5 }}
-                >
-                  <Card className="p-6 text-center bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                      <Icon className="w-6 h-6 text-white" />
+                <ScrollReveal key={index} delay={index * 0.1}>
+                  <HolographicCard glowColor="blue" className="p-6 text-center">
+                    <div className="w-12 h-12 bg-neon-cyan/20 rounded-lg flex items-center justify-center mx-auto mb-4 border border-neon-cyan/30">
+                      <Icon className="w-6 h-6 text-neon-cyan" />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
-                    <p className="text-sm text-gray-600">{feature.description}</p>
-                  </Card>
-                </motion.div>
+                    <h3 className="text-lg font-bold mb-2 text-gray-100 font-orbitron">{feature.title}</h3>
+                    <p className="text-sm text-gray-400">{feature.description}</p>
+                  </HolographicCard>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -570,117 +559,113 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 bg-gray-50 relative z-10">
+      <section className="py-20 bg-dark-bg/50 relative z-10 backdrop-blur-sm">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                Loved by Real Estate Professionals
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="purple">Loved by Real Estate Professionals</NeonText>
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
                 Join hundreds of agents who have transformed their business
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.2, duration: 0.6 }}
-              >
-                <Card className="p-8 h-full bg-white border border-gray-200 shadow-sm hover:shadow-lg transition-shadow">
+              <ScrollReveal key={index} delay={index * 0.2}>
+                <HolographicCard glowColor={index === 1 ? 'purple' : 'blue'} className="p-8 h-full">
                   <div className="flex gap-1 mb-4">
                     {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      <Star key={i} className="w-5 h-5 fill-neon-cyan text-neon-cyan" />
                     ))}
                   </div>
-                  <p className="text-gray-700 mb-6 italic">"{testimonial.content}"</p>
+                  <p className="text-gray-300 mb-6 italic">"{testimonial.content}"</p>
                   <div>
-                    <div className="font-bold text-gray-900">{testimonial.name}</div>
-                    <div className="text-sm text-gray-600">{testimonial.role}</div>
+                    <div className="font-bold text-neon-cyan">{testimonial.name}</div>
+                    <div className="text-sm text-gray-400">{testimonial.role}</div>
                   </div>
-                </Card>
-              </motion.div>
+                </HolographicCard>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
       {/* Pricing Section */}
-      <section className="py-20 bg-white relative z-10">
+      <section className="py-20 bg-dark-bg relative z-10">
         <div className="container mx-auto px-4">
-          <TextReveal>
+          <ScrollReveal>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                Simple, Transparent Pricing
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+                <NeonText color="blue">Simple, Transparent Pricing</NeonText>
               </h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
                 Choose the plan that fits your business. All plans include 14-day free trial.
               </p>
             </div>
-          </TextReveal>
+          </ScrollReveal>
           
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {pricingTiers.map((tier, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1, duration: 0.6 }}
-                className={`relative ${tier.popular ? 'md:-mt-4 md:mb-4' : ''}`}
-              >
-                {tier.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full shadow-sm">
-                    Most Popular
-                  </div>
-                )}
-                <Card className={`p-8 h-full bg-white border-2 shadow-lg hover:shadow-xl transition-shadow ${tier.popular ? 'border-blue-600' : 'border-gray-200'}`}>
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{tier.name}</h3>
-                    <p className="text-gray-600 mb-4">{tier.description}</p>
-                    <div className="flex items-baseline justify-center gap-2">
-                      <span className="text-5xl font-bold text-gray-900">{tier.price}</span>
-                      <span className="text-gray-600">{tier.period}</span>
+              <ScrollReveal key={index} delay={index * 0.1}>
+                <motion.div
+                  className={`relative ${tier.popular ? 'md:-mt-4 md:mb-4' : ''}`}
+                  whileHover={{ y: -10, scale: 1.02 }}
+                >
+                  {tier.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-neon-cyan text-dark-bg text-sm font-semibold rounded-full shadow-neon-glow-blue">
+                      Most Popular
                     </div>
-                  </div>
-                  <ul className="space-y-3 mb-8">
-                    {tier.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                        <span className="text-gray-700">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {!isAuthenticated && (
-                    <Link href="/signup">
-                      <Button className="w-full" size="lg" variant={tier.popular ? 'default' : 'outline'}>
-                        Start Free Trial
-                      </Button>
-                    </Link>
                   )}
-                </Card>
-              </motion.div>
+                  <HolographicCard 
+                    glowColor={tier.popular ? 'blue' : 'purple'}
+                    className={`p-8 h-full ${tier.popular ? 'border-2 border-neon-cyan' : ''}`}
+                  >
+                    <div className="text-center mb-6">
+                      <h3 className="text-2xl font-bold mb-2 text-gray-100 font-orbitron">{tier.name}</h3>
+                      <p className="text-gray-400 mb-4">{tier.description}</p>
+                      <div className="flex items-baseline justify-center gap-2">
+                        <span className="text-5xl font-bold text-neon-cyan font-orbitron">{tier.price}</span>
+                        <span className="text-gray-400">{tier.period}</span>
+                      </div>
+                    </div>
+                    <ul className="space-y-3 mb-8">
+                      {tier.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-3">
+                          <CheckCircle2 className="w-5 h-5 text-neon-cyan flex-shrink-0" />
+                          <span className="text-gray-300">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {!isAuthenticated && (
+                      <Link href="/signup">
+                        <NeonButton className="w-full" size="lg" glowColor={tier.popular ? 'blue' : 'purple'}>
+                          Start Free Trial
+                        </NeonButton>
+                      </Link>
+                    )}
+                  </HolographicCard>
+                </motion.div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-20 bg-gray-900 relative z-10">
-        <div className="container mx-auto px-4 text-center">
+      <section className="py-20 bg-dark-bg relative z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/10 via-neon-purple/10 to-neon-pink/10"></div>
+        <div className="container mx-auto px-4 text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Ready to Transform Your Business?
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 font-orbitron">
+              <NeonText color="blue">Ready to Transform Your Business?</NeonText>
             </h2>
             <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
               Join thousands of real estate professionals who have revolutionized their workflow with AI.
@@ -688,13 +673,13 @@ export default function LandingPage() {
             {!isAuthenticated && (
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/signup">
-                  <Button size="lg" variant="secondary" className="text-lg px-8 py-6 shadow-lg">
+                  <NeonButton size="lg" className="text-lg px-8 py-6" glowColor="blue">
                     Start Free Trial
                     <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
+                  </NeonButton>
                 </Link>
                 <Link href="/signin">
-                  <Button size="lg" variant="outline" className="text-white border-white hover:bg-white hover:text-gray-900 text-lg px-8 py-6">
+                  <Button size="lg" variant="outline" className="text-neon-cyan border-neon-cyan hover:bg-neon-cyan/10 text-lg px-8 py-6">
                     Sign In
                   </Button>
                 </Link>
@@ -705,49 +690,49 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12 relative z-10">
+      <footer className="bg-dark-bg border-t border-neon-cyan/20 text-gray-400 py-12 relative z-10">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Mail className="w-5 h-5 text-white" />
+                <div className="w-8 h-8 bg-gradient-to-br from-neon-cyan to-neon-purple rounded-lg flex items-center justify-center shadow-neon-glow-blue">
+                  <Mail className="w-5 h-5 text-dark-bg" />
                 </div>
-                <span className="text-white font-semibold">RealInbox AI Pro</span>
+                <span className="text-neon-cyan font-semibold font-orbitron">RealInbox AI Pro</span>
               </div>
-              <p className="text-sm">
+              <p className="text-sm text-gray-400">
                 The all-in-one AI platform for real estate professionals. Transform your business with intelligent automation.
               </p>
             </div>
             <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
+              <h4 className="text-neon-cyan font-semibold mb-4 font-orbitron">Product</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/features" className="hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="/integrations" className="hover:text-white transition-colors">Integrations</Link></li>
-                <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
+                <li><Link href="/features" className="hover:text-neon-cyan transition-colors">Features</Link></li>
+                <li><Link href="/pricing" className="hover:text-neon-cyan transition-colors">Pricing</Link></li>
+                <li><Link href="/integrations" className="hover:text-neon-cyan transition-colors">Integrations</Link></li>
+                <li><Link href="/security" className="hover:text-neon-cyan transition-colors">Security</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
+              <h4 className="text-neon-cyan font-semibold mb-4 font-orbitron">Company</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/about" className="hover:text-white transition-colors">About</Link></li>
-                <li><Link href="/blog" className="hover:text-white transition-colors">Blog</Link></li>
-                <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-                <li><Link href="/careers" className="hover:text-white transition-colors">Careers</Link></li>
+                <li><Link href="/about" className="hover:text-neon-cyan transition-colors">About</Link></li>
+                <li><Link href="/blog" className="hover:text-neon-cyan transition-colors">Blog</Link></li>
+                <li><Link href="/contact" className="hover:text-neon-cyan transition-colors">Contact</Link></li>
+                <li><Link href="/careers" className="hover:text-neon-cyan transition-colors">Careers</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <h4 className="text-neon-cyan font-semibold mb-4 font-orbitron">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link></li>
-                <li><Link href="/terms" className="hover:text-white transition-colors">Terms</Link></li>
-                <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
-                <li><Link href="/gdpr" className="hover:text-white transition-colors">GDPR</Link></li>
+                <li><Link href="/privacy" className="hover:text-neon-cyan transition-colors">Privacy</Link></li>
+                <li><Link href="/terms" className="hover:text-neon-cyan transition-colors">Terms</Link></li>
+                <li><Link href="/security" className="hover:text-neon-cyan transition-colors">Security</Link></li>
+                <li><Link href="/gdpr" className="hover:text-neon-cyan transition-colors">GDPR</Link></li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 text-center text-sm">
+          <div className="border-t border-neon-cyan/20 pt-8 text-center text-sm">
             <p>&copy; {new Date().getFullYear()} RealInbox AI Pro. All rights reserved.</p>
           </div>
         </div>

@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input, Textarea } from '@/components/ui/input';
@@ -197,7 +201,7 @@ export default function PropertiesPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -206,21 +210,23 @@ export default function PropertiesPage() {
           animate="visible"
           className="space-y-6"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                Properties
-              </h1>
-              <p className="text-gray-400">Manage your real estate properties</p>
+          <ScrollReveal>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-4xl font-orbitron font-bold mb-2">
+                  <NeonText color="blue">Properties</NeonText>
+                </h1>
+                <p className="text-gray-400">Manage your real estate properties</p>
+              </div>
+              <NeonButton onClick={() => setIsCreating(true)} glowColor="blue">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Property
+              </NeonButton>
             </div>
-            <Button variant="primary" onClick={() => setIsCreating(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Property
-            </Button>
-          </div>
+          </ScrollReveal>
 
           {/* Filters */}
-          <Card className="p-4">
+          <HolographicCard glowColor="blue" className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <Input

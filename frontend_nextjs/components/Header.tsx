@@ -21,12 +21,22 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 glass-effect border-b border-neon-cyan/20">
+    <motion.header 
+      className="sticky top-0 z-50 glass-effect border-b border-neon-cyan/20 bg-dark-bg/80 backdrop-blur-md"
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.6 }}
+    >
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <Sparkles className="w-8 h-8 text-neon-cyan group-hover:text-neon-pink transition-colors" />
-            <span className="text-xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon">
+            <motion.div
+              whileHover={{ scale: 1.2, rotate: 360 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Sparkles className="w-8 h-8 text-neon-cyan group-hover:text-neon-pink transition-colors drop-shadow-[0_0_10px_#00FFFF]" />
+            </motion.div>
+            <span className="text-xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon neon-glow">
               RealInbox AI Pro
             </span>
           </Link>
@@ -35,26 +45,34 @@ export function Header() {
             <>
             <nav className="hidden md:flex items-center gap-6" role="navigation" aria-label="Main navigation">
               {navLinks.map((link) => (
-                <Link
+                <motion.div
                   key={link.href}
-                  href={link.href}
-                  className="text-gray-300 hover:text-neon-cyan transition-colors font-medium relative group"
-                  aria-label={`Navigate to ${link.label}`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  {link.label}
-                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-neon-cyan group-hover:w-full transition-all duration-300" />
-                </Link>
+                  <Link
+                    href={link.href}
+                    className="text-gray-300 hover:text-neon-cyan transition-colors font-medium relative group px-2 py-1"
+                    aria-label={`Navigate to ${link.label}`}
+                  >
+                    {link.label}
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-neon-cyan group-hover:w-full transition-all duration-300 shadow-[0_0_10px_#00FFFF]" />
+                    <span className="absolute inset-0 bg-neon-cyan/10 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
+                  </Link>
+                </motion.div>
               ))}
             </nav>
 
               <div className="hidden md:flex items-center gap-4">
                 <span className="text-sm text-gray-400">{user?.full_name}</span>
-                <button
+                <motion.button
                   onClick={logout}
-                  className="px-4 py-2 border border-neon-cyan/30 rounded-lg hover:border-neon-cyan transition-colors"
+                  className="px-4 py-2 border border-neon-cyan/30 rounded-lg hover:border-neon-cyan transition-colors neon-border hover:shadow-neon-glow-blue"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   Logout
-                </button>
+                </motion.button>
               </div>
 
               <button

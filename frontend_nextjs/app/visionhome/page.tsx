@@ -6,6 +6,10 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { CameraScan } from '@/components/CameraScan';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { UpsellModal } from '@/components/UpsellModal';
 import { useAPIMutation } from '@/lib/hooks/useAPI';
@@ -72,7 +76,7 @@ export default function VisionHomePage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -81,22 +85,26 @@ export default function VisionHomePage() {
           animate="visible"
           className="space-y-8"
         >
-          <div>
-            <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-              VisionHome AI
-            </h1>
-            <p className="text-gray-400">Scan properties with computer vision and get instant insights</p>
-          </div>
+          <ScrollReveal>
+            <div>
+              <h1 className="text-4xl font-orbitron font-bold mb-2">
+                <NeonText color="blue">VisionHome AI</NeonText>
+              </h1>
+              <p className="text-gray-400">Scan properties with computer vision and get instant insights</p>
+            </div>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Camera Interface */}
-            <Card className="p-6">
-              <h2 className="text-2xl font-orbitron text-neon-cyan mb-4 flex items-center gap-2">
-                <Camera className="w-6 h-6" />
-                Camera Scan
-              </h2>
-              <CameraScan onCapture={handleCapture} />
-            </Card>
+            <ScrollReveal delay={0.1}>
+              <HolographicCard glowColor="blue" className="p-6">
+                <h2 className="text-2xl font-orbitron text-neon-cyan mb-4 flex items-center gap-2">
+                  <Camera className="w-6 h-6" />
+                  Camera Scan
+                </h2>
+                <CameraScan onCapture={handleCapture} />
+              </HolographicCard>
+            </ScrollReveal>
 
             {/* Upload Interface */}
             <Card className="p-6">

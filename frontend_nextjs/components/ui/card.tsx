@@ -14,10 +14,10 @@ export function Card({ className, children, glow = false, glass = false, ...prop
         'rounded-xl border transition-premium',
         glass 
           ? 'glass-premium-light' 
-          : 'bg-white dark:bg-dark-purple/50 border-gray-200 dark:border-neon-cyan/20',
+          : 'bg-dark-bg/50 border-neon-cyan/20 backdrop-blur-sm',
         'p-6',
-        'hover:shadow-premium-lg hover:scale-[1.02]',
-        glow && 'shadow-glow',
+        'hover:shadow-neon-glow-blue hover:scale-[1.02]',
+        glow && 'shadow-neon-glow-blue',
         className
       )}
       {...props}

@@ -4,6 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { useAPI, useAPIMutation } from '@/lib/hooks/useAPI';
 import { subscriptionAPI, paymentsAPI } from '@/lib/api';
@@ -85,7 +89,7 @@ export default function SubscriptionPage() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -94,12 +98,14 @@ export default function SubscriptionPage() {
           animate="visible"
           className="space-y-8"
         >
-          <div>
-            <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-              Subscription Plans
-            </h1>
-            <p className="text-gray-400">Choose the plan that fits your needs</p>
-          </div>
+          <ScrollReveal>
+            <div>
+              <h1 className="text-4xl font-orbitron font-bold mb-2">
+                <NeonText color="purple">Subscription Plans</NeonText>
+              </h1>
+              <p className="text-gray-400">Choose the plan that fits your needs</p>
+            </div>
+          </ScrollReveal>
 
           {/* Usage Summary */}
           {usage && (

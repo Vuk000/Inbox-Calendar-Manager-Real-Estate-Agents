@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAPI, useAPIMutation } from '@/lib/hooks/useAPI';
@@ -147,7 +151,7 @@ export default function AIActionsPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -156,26 +160,28 @@ export default function AIActionsPage() {
           animate="visible"
           className="space-y-6"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon mb-2">
-                AI Actions
-              </h1>
-              <p className="text-gray-400">Review and approve AI-suggested actions</p>
+          <ScrollReveal>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-orbitron font-bold mb-2">
+                  <NeonText color="purple">AI Actions</NeonText>
+                </h1>
+                <p className="text-gray-400">Review and approve AI-suggested actions</p>
+              </div>
+              <Select
+                options={[
+                  { value: 'all', label: 'All Actions' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'confirmed', label: 'Confirmed' },
+                  { value: 'rejected', label: 'Rejected' },
+                  { value: 'expired', label: 'Expired' },
+                ]}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value)}
+                placeholder="Filter by status"
+              />
             </div>
-            <Select
-              options={[
-                { value: 'all', label: 'All Actions' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'confirmed', label: 'Confirmed' },
-                { value: 'rejected', label: 'Rejected' },
-                { value: 'expired', label: 'Expired' },
-              ]}
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
-              placeholder="Filter by status"
-            />
-          </div>
+          </ScrollReveal>
 
           {isLoading ? (
             <Card className="p-12 text-center">

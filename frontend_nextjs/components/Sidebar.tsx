@@ -70,23 +70,30 @@ export function Sidebar() {
   }, []);
 
   const SidebarContent = ({ onItemClick }: { onItemClick?: () => void }) => (
-    <div className="flex flex-col h-full">
+    <motion.div 
+      className="flex flex-col h-full bg-dark-bg/90 backdrop-blur-md border-r border-neon-cyan/20"
+      initial={{ x: -300 }}
+      animate={{ x: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       <div className="p-4 border-b border-neon-cyan/20 mb-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon">
+          <h2 className="text-xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-neon neon-glow">
             RealInbox AI Pro
           </h2>
-          <button
+          <motion.button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:block p-1 bg-dark-purple border border-neon-cyan rounded-full hover:bg-neon-cyan/10 transition-colors"
+            className="hidden md:block p-1 bg-dark-bg border border-neon-cyan rounded-full hover:bg-neon-cyan/10 transition-colors neon-border"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             {isCollapsed ? (
               <ChevronRight className="w-4 h-4 text-neon-cyan" />
             ) : (
               <ChevronLeft className="w-4 h-4 text-neon-cyan" />
             )}
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -96,26 +103,37 @@ export function Sidebar() {
           const isActive = pathname === item.href;
 
           return (
-            <Link
+            <motion.div
               key={item.href}
-              href={item.href}
-              onClick={onItemClick}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300',
-                'hover:bg-neon-cyan/10 hover:text-neon-cyan focus:outline-none focus:ring-2 focus:ring-neon-cyan',
-                'touch-manipulation', // Better touch targets
-                isActive
-                  ? 'bg-neon-cyan/20 text-neon-cyan border-l-2 border-neon-cyan'
-                  : 'text-gray-400'
-              )}
-              aria-label={item.label}
-              aria-current={isActive ? 'page' : undefined}
+              whileHover={{ x: 4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-              {(!isCollapsed || isMobileOpen) && (
-                <span className="font-medium">{item.label}</span>
-              )}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={onItemClick}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 relative group',
+                  'hover:bg-neon-cyan/10 hover:text-neon-cyan focus:outline-none focus:ring-2 focus:ring-neon-cyan',
+                  'touch-manipulation',
+                  isActive
+                    ? 'bg-neon-cyan/20 text-neon-cyan border-l-4 border-neon-cyan shadow-[0_0_10px_rgba(0,255,255,0.5)]'
+                    : 'text-gray-400'
+                )}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <Icon className={cn(
+                  'w-5 h-5 flex-shrink-0 transition-all',
+                  isActive && 'drop-shadow-[0_0_5px_#00FFFF]'
+                )} aria-hidden="true" />
+                {(!isCollapsed || isMobileOpen) && (
+                  <span className="font-medium">{item.label}</span>
+                )}
+                {isActive && (
+                  <span className="absolute right-2 w-2 h-2 bg-neon-cyan rounded-full animate-pulse shadow-[0_0_5px_#00FFFF]" />
+                )}
+              </Link>
+            </motion.div>
           );
         })}
       </nav>
@@ -139,9 +157,9 @@ export function Sidebar() {
       {/* Desktop Sidebar */}
       <motion.aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-dark-purple/80 backdrop-blur-sm border-r border-neon-cyan/20',
+          'fixed left-0 top-0 h-screen bg-dark-bg/90 backdrop-blur-md border-r border-neon-cyan/20',
           'transition-all duration-300 z-40',
-          'hidden md:block', // Hide on mobile, show on desktop
+          'hidden md:block',
           isCollapsed ? 'w-16' : 'w-64'
         )}
         initial={{ x: -300 }}

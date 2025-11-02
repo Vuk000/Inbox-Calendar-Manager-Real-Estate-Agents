@@ -7,6 +7,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
+import { NeonText } from '@/components/cyberpunk/NeonText';
 import { Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -55,14 +58,14 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen gradient-premium-subtle flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background gradient */}
-      <div className="absolute inset-0 gradient-animated opacity-20"></div>
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Cyberpunk Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/10 via-neon-purple/10 to-neon-pink/10 opacity-50"></div>
       
       <div className="w-full max-w-md relative z-10 animate-fade-in-up">
         <Link 
           href="/" 
-          className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-premium mb-6 group"
+          className="inline-flex items-center gap-2 text-gray-300 hover:text-neon-cyan transition-premium mb-6 group"
         >
           <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           <span className="font-medium">Return to Home</span>
@@ -70,16 +73,18 @@ export default function SignUpPage() {
         
         <div className="text-center mb-8 animate-fade-in-down">
           <Link href="/" className="inline-flex items-center gap-2 mb-4 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-premium group-hover:scale-110 transition-premium">
-              <Mail className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-neon-cyan to-neon-purple rounded-lg flex items-center justify-center shadow-neon-glow-blue group-hover:scale-110 transition-premium">
+              <Mail className="w-6 h-6 text-dark-bg" />
             </div>
-            <span className="text-2xl font-semibold text-gray-900">RealInbox AI Pro</span>
+            <span className="text-2xl font-semibold text-neon-cyan font-orbitron neon-glow">RealInbox AI Pro</span>
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Your Account</h1>
-          <p className="text-gray-600">Start your free trial today</p>
+          <h1 className="text-3xl font-bold mb-2 font-orbitron">
+            <NeonText color="purple">Create Your Account</NeonText>
+          </h1>
+          <p className="text-gray-400">Start your free trial today</p>
         </div>
 
-        <Card glass className="p-8 shadow-premium-xl animate-scale-in">
+        <HolographicCard glowColor="purple" className="p-8 shadow-premium-xl animate-scale-in">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -225,7 +230,7 @@ export default function SignUpPage() {
               </Link>
             </p>
           </div>
-        </Card>
+          </HolographicCard>
       </div>
     </div>
   );

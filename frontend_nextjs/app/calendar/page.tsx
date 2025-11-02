@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { HolographicCard } from '@/components/cyberpunk/HolographicCard';
+import { ScrollReveal } from '@/components/cyberpunk/ScrollReveal';
+import { NeonText } from '@/components/cyberpunk/NeonText';
+import { NeonButton } from '@/components/cyberpunk/NeonButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAPI, useAPIMutation } from '@/lib/hooks/useAPI';
@@ -176,7 +180,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-bg">
       <Sidebar />
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         <motion.div
@@ -223,7 +227,7 @@ export default function CalendarPage() {
 
           {/* AI Suggestions */}
           {aiSuggestedEvents.length > 0 && (
-            <Card className="p-4 bg-neon-pink/10 border-neon-pink/50">
+            <HolographicCard glowColor="pink" className="p-4 bg-neon-pink/10 border-neon-pink/50">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-neon-pink" />
                 <h3 className="text-lg font-orbitron text-neon-pink">AI Suggestions</h3>
@@ -249,7 +253,7 @@ export default function CalendarPage() {
           )}
 
           {/* Calendar */}
-          <Card className="p-6">
+          <HolographicCard glowColor="blue" className="p-6">
             <style jsx global>{`
               .fc {
                 --fc-border-color: rgba(0, 255, 255, 0.2);
