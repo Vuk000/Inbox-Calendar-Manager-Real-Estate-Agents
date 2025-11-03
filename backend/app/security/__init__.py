@@ -1,8 +1,10 @@
 """Security and authentication utilities"""
 from .encryption import encrypt_data, decrypt_data, hash_password, verify_password
 from .jwt_handler import create_access_token, create_refresh_token, verify_token
-from .rbac import check_permission, require_role
 from .audit import log_action
+
+# Note: RBAC functions are imported directly from .rbac to avoid circular imports
+# Use: from app.security.rbac import check_permission, require_role, require_subscription_tier
 
 __all__ = [
     "encrypt_data",
@@ -12,8 +14,6 @@ __all__ = [
     "create_access_token",
     "create_refresh_token",
     "verify_token",
-    "check_permission",
-    "require_role",
     "log_action"
 ]
 

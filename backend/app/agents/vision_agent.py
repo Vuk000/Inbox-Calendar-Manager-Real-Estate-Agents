@@ -1,10 +1,18 @@
 """VisionHome AI Agent - Computer vision analysis for property scans"""
 from typing import Dict, Any, List, Optional
 import logging
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+
+# Optional LangChain imports - gracefully handle if not installed
+try:
+    from langchain.chains import LLMChain
+    from langchain.prompts import PromptTemplate
+    from langchain_openai import ChatOpenAI
+    from langchain_anthropic import ChatAnthropic
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("LangChain not available - some features may be limited")
 
 from ..config import settings
 from ..integrations.google_vision import GoogleVisionClient
@@ -40,39 +48,45 @@ class VisionAgent:
         self.vision_client = vision_client or GoogleVisionClient()
         self.zillow_client = zillow_client or ZillowIntegration()
         
-        # Initialize LLM (use Claude for analysis)
+        # Initialize LLM (use Claude for analysis) - only if LangChain is available
         if llm_client:
             self.llm = llm_client
-        else:
+        elif LANGCHAIN_AVAILABLE:
             self.llm = ChatAnthropic(
                 api_key=settings.ANTHROPIC_API_KEY,
                 model=settings.ANTHROPIC_MODEL,
                 temperature=0.3
             )
+        else:
+            self.llm = None
+            logger.warning("LangChain not available - using fallback analysis without LLM")
         
-        # LangChain prompt for property analysis
-        self.analysis_prompt = PromptTemplate(
-            input_variables=["vision_labels", "rooms", "features"],
-            template="""
-            Analyze this property image data and provide insights:
-            
-            Detected Labels: {vision_labels}
-            Rooms Detected: {rooms}
-            Property Features: {features}
-            
-            Provide:
-            1. Property type assessment (house, condo, apartment, etc.)
-            2. Condition assessment (excellent, good, fair, needs work)
-            3. Key selling points
-            4. Renovation opportunities
-            5. Estimated property value range
-            
-            Format as JSON with keys: property_type, condition, selling_points (array), 
-            renovation_opportunities (array), estimated_value_range (object with min/max).
-            """
-        )
-        
-        self.analysis_chain = LLMChain(llm=self.llm, prompt=self.analysis_prompt)
+        # LangChain prompt for property analysis (if available)
+        if LANGCHAIN_AVAILABLE and self.llm:
+            self.analysis_prompt = PromptTemplate(
+                input_variables=["vision_labels", "rooms", "features"],
+                template="""
+                Analyze this property image data and provide insights:
+                
+                Detected Labels: {vision_labels}
+                Rooms Detected: {rooms}
+                Property Features: {features}
+                
+                Provide:
+                1. Property type assessment (house, condo, apartment, etc.)
+                2. Condition assessment (excellent, good, fair, needs work)
+                3. Key selling points
+                4. Renovation opportunities
+                5. Estimated property value range
+                
+                Format as JSON with keys: property_type, condition, selling_points (array), 
+                renovation_opportunities (array), estimated_value_range (object with min/max).
+                """
+            )
+            self.analysis_chain = LLMChain(llm=self.llm, prompt=self.analysis_prompt)
+        else:
+            self.analysis_prompt = None
+            self.analysis_chain = None
     
     async def analyze_property_image(
         self,
@@ -99,31 +113,30 @@ class VisionAgent:
                 image_uri=image_uri
             )
             
-            # Step 2: LLM analysis for insights
-            logger.info("Running LLM analysis...")
-            labels_text = ", ".join([l['description'] for l in vision_results.get('labels', [])[:10]])
-            rooms_text = ", ".join([r['type'] for r in vision_results.get('rooms', [])])
-            features_text = str(vision_results.get('property_features', {}))
-            
-            analysis_result = await self.analysis_chain.arun(
-                vision_labels=labels_text,
-                rooms=rooms_text,
-                features=features_text
-            )
-            
-            # Parse LLM response (should be JSON)
-            import json
-            try:
-                analysis_data = json.loads(analysis_result)
-            except:
-                # Fallback if not valid JSON
-                analysis_data = {
-                    "property_type": vision_results.get('property_features', {}).get('style', 'unknown'),
-                    "condition": vision_results.get('property_features', {}).get('condition', 'unknown'),
-                    "selling_points": [],
-                    "renovation_opportunities": vision_results.get('property_features', {}).get('renovation_opportunities', []),
-                    "estimated_value_range": {"min": 0, "max": 0}
-                }
+            # Step 2: LLM analysis for insights (if available)
+            if self.analysis_chain:
+                logger.info("Running LLM analysis...")
+                labels_text = ", ".join([l['description'] for l in vision_results.get('labels', [])[:10]])
+                rooms_text = ", ".join([r['type'] for r in vision_results.get('rooms', [])])
+                features_text = str(vision_results.get('property_features', {}))
+                
+                analysis_result = await self.analysis_chain.arun(
+                    vision_labels=labels_text,
+                    rooms=rooms_text,
+                    features=features_text
+                )
+                
+                # Parse LLM response (should be JSON)
+                import json
+                try:
+                    analysis_data = json.loads(analysis_result)
+                except:
+                    # Fallback if not valid JSON
+                    analysis_data = self._fallback_analysis(vision_results)
+            else:
+                # Fallback analysis without LLM
+                logger.info("Using fallback analysis (LangChain not available)")
+                analysis_data = self._fallback_analysis(vision_results)
             
             # Step 3: Find similar properties using Zillow and ML
             matches = []
@@ -190,6 +203,16 @@ class VisionAgent:
         except Exception as e:
             logger.error(f"Vision analysis error: {e}")
             raise VisionProcessingException(f"Failed to analyze property image: {str(e)}")
+    
+    def _fallback_analysis(self, vision_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback analysis when LLM is not available"""
+        return {
+            "property_type": vision_results.get('property_features', {}).get('style', 'unknown'),
+            "condition": vision_results.get('property_features', {}).get('condition', 'unknown'),
+            "selling_points": vision_results.get('property_features', {}).get('key_features', []),
+            "renovation_opportunities": vision_results.get('property_features', {}).get('renovation_opportunities', []),
+            "estimated_value_range": {"min": 0, "max": 0}
+        }
     
     def _extract_matching_features(
         self,

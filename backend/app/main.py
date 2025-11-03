@@ -62,14 +62,97 @@ async def lifespan(app: FastAPI):
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Initialize FastAPI app
+# Initialize FastAPI app with comprehensive documentation
 app = FastAPI(
     title=settings.APP_NAME,
-    description="RealInbox AI Pro - Enterprise-grade AI inbox manager for real estate agents with VisionHome AI (computer vision property scans) and Neighborhood Whisper (NLP/ML neighborhood fit scores)",
+    description="""
+    **RealInbox AI Pro** - Enterprise-grade AI inbox manager for real estate agents.
+    
+    ## Features
+    
+    ### Core Inbox Management
+    - **Unified Inbox**: Manage multiple email accounts (Gmail, Outlook) in one place
+    - **AI Email Triage**: Automatic categorization and prioritization using Claude Sonnet 4.5
+    - **AI Draft Generation**: Generate personalized email responses with voice matching
+    - **Smart Calendar**: AI-powered scheduling and calendar management
+    
+    ### VisionHome AI
+    - **Computer Vision**: Property image analysis using Google Cloud Vision
+    - **Virtual Renovations**: AI-powered renovation suggestions
+    - **Property Matching**: Match properties using ML algorithms
+    
+    ### Neighborhood Whisper
+    - **Fit Scores**: ML-powered neighborhood compatibility scoring
+    - **Market Forecasts**: Predictive analytics for neighborhoods
+    - **Eco-Values**: Environmental impact analysis
+    
+    ### CRM & Pipeline
+    - **Contact Management**: Unified CRM with timeline tracking
+    - **Transaction Pipeline**: Deal tracking from offer to closing
+    - **Team Collaboration**: Shared inboxes and team workflows
+    
+    ### Security & Compliance
+    - **JWT Authentication**: Secure token-based authentication
+    - **RBAC**: Role-based access control
+    - **AES-256 Encryption**: Bank-level security for sensitive data
+    - **GDPR Compliant**: Full data privacy controls
+    
+    ## API Versioning
+    
+    All endpoints are versioned under `/api/v1/`. Use the version header for future compatibility.
+    
+    ## Authentication
+    
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your_access_token>
+    ```
+    
+    ## Rate Limiting
+    
+    API requests are rate-limited:
+    - 60 requests per minute
+    - 1000 requests per hour
+    
+    ## WebSocket Support
+    
+    Real-time updates are available via WebSocket connections for:
+    - New email notifications
+    - AI draft completion
+    - Task updates
+    - Transaction status changes
+    
+    ## Support
+    
+    For API support, contact: support@realinbox.ai
+    """,
     version="3.0.0",
     docs_url=f"/api/{settings.API_VERSION}/docs",
     redoc_url=f"/api/{settings.API_VERSION}/redoc",
-    lifespan=lifespan
+    openapi_url=f"/api/{settings.API_VERSION}/openapi.json",
+    lifespan=lifespan,
+    contact={
+        "name": "RealInbox AI Pro Support",
+        "email": "support@realinbox.ai",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
+    servers=[
+        {
+            "url": "http://localhost:8000",
+            "description": "Local development server"
+        },
+        {
+            "url": "https://api.realinbox.ai",
+            "description": "Production server"
+        }
+    ] if settings.APP_ENV == "production" else [
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server"
+        }
+    ]
 )
 
 # Add rate limiter to app state
@@ -98,40 +181,200 @@ async def add_process_time_header(request: Request, call_next):
     return response
 
 
-# Global exception handler
+# Enhanced exception handlers
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    """Handle 404 Not Found errors"""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "detail": "Endpoint not found",
+            "path": str(request.url.path),
+            "method": request.method
+        }
+    )
+
+
+@app.exception_handler(422)
+async def validation_error_handler(request: Request, exc: Exception):
+    """Handle validation errors"""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Validation error",
+            "error": str(exc) if settings.DEBUG else "Invalid request format"
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions"""
+    """
+    Handle uncaught exceptions with proper error reporting.
+    
+    In production, detailed error messages are hidden for security.
+    Errors are logged to Sentry if configured.
+    """
+    # Log error to Sentry if configured
+    if settings.SENTRY_DSN:
+        import sentry_sdk
+        sentry_sdk.capture_exception(exc)
+    
+    # Log error details
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "detail": "Internal server error",
-            "error": str(exc) if settings.DEBUG else "An error occurred"
+            "error": str(exc) if settings.DEBUG else "An error occurred",
+            "path": str(request.url.path),
+            "method": request.method
         }
     )
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"])
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Health Check",
+    description="Check API health status and dependencies",
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "app": "RealInbox AI Pro",
+                        "version": "3.0.0",
+                        "environment": "production",
+                        "database": "connected",
+                        "redis": "connected",
+                        "celery": "available"
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_check():
-    """Health check endpoint for monitoring"""
-    return {
+    """
+    Health check endpoint for monitoring and load balancers.
+    
+    Returns the current health status of the API and its dependencies.
+    Use this endpoint for monitoring, health checks, and status pages.
+    """
+    health_status = {
         "status": "healthy",
         "app": settings.APP_NAME,
-        "version": "1.0.0",
+        "version": "3.0.0",
         "environment": settings.APP_ENV
     }
+    
+    # Check database connection
+    try:
+        from .db import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        health_status["database"] = "connected"
+    except Exception as e:
+        health_status["database"] = "disconnected"
+        health_status["database_error"] = str(e) if settings.DEBUG else "Connection failed"
+    
+    # Check Redis connection
+    try:
+        import redis
+        if settings.REDIS_ENABLED:
+            r = redis.from_url(settings.REDIS_URL)
+            r.ping()
+            health_status["redis"] = "connected"
+        else:
+            health_status["redis"] = "disabled"
+    except Exception as e:
+        health_status["redis"] = "disconnected"
+        health_status["redis_error"] = str(e) if settings.DEBUG else "Connection failed"
+    
+    # Check Celery
+    try:
+        from .workers.celery_app import celery_app
+        if celery_app is not None:
+            health_status["celery"] = "available"
+        else:
+            health_status["celery"] = "disabled"
+    except Exception:
+        health_status["celery"] = "unavailable"
+    
+    return health_status
 
 
 # Root endpoint
-@app.get("/", tags=["Root"])
+@app.get(
+    "/",
+    tags=["Root"],
+    summary="API Information",
+    description="Get basic API information and available endpoints",
+    responses={
+        200: {
+            "description": "API information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "app": "RealInbox AI Pro",
+                        "version": "3.0.0",
+                        "docs": "/api/v1/docs",
+                        "status": "operational",
+                        "endpoints": {
+                            "auth": "/api/v1/auth",
+                            "emails": "/api/v1/emails",
+                            "vision": "/api/v1/vision",
+                            "neighborhood": "/api/v1/neighborhood",
+                            "calendar": "/api/v1/calendar"
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def root():
-    """Root endpoint with API info"""
+    """
+    Root endpoint with API information.
+    
+    Returns basic information about the API including:
+    - Application name and version
+    - Documentation URLs
+    - Service status
+    - Available endpoint categories
+    """
     return {
         "app": settings.APP_NAME,
-        "version": "1.0.0",
+        "version": "3.0.0",
         "docs": f"/api/{settings.API_VERSION}/docs",
-        "status": "operational"
+        "redoc": f"/api/{settings.API_VERSION}/redoc",
+        "openapi": f"/api/{settings.API_VERSION}/openapi.json",
+        "status": "operational",
+        "environment": settings.APP_ENV,
+        "endpoints": {
+            "auth": f"/api/{settings.API_VERSION}/auth",
+            "emails": f"/api/{settings.API_VERSION}/emails",
+            "drafts": f"/api/{settings.API_VERSION}/drafts",
+            "tasks": f"/api/{settings.API_VERSION}/tasks",
+            "calendar": f"/api/{settings.API_VERSION}/calendar",
+            "vision": f"/api/{settings.API_VERSION}/vision",
+            "neighborhood": f"/api/{settings.API_VERSION}/neighborhood",
+            "contacts": f"/api/{settings.API_VERSION}/contacts",
+            "transactions": f"/api/{settings.API_VERSION}/transactions",
+            "teams": f"/api/{settings.API_VERSION}/teams",
+            "analytics": f"/api/{settings.API_VERSION}/analytics",
+            "subscription": f"/api/{settings.API_VERSION}/subscription",
+            "websocket": f"/api/{settings.API_VERSION}/ws"
+        }
     }
 
 
@@ -145,7 +388,7 @@ from .routers import (
     vision, neighborhood, subscription, calendar
 )
 
-app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}/auth", tags=["Authentication"])
+app.include_router(auth.router, prefix=f"/api/{settings.API_VERSION}")
 app.include_router(emails.router, prefix=f"/api/{settings.API_VERSION}", tags=["Emails"])
 app.include_router(drafts.router, prefix=f"/api/{settings.API_VERSION}", tags=["Drafts"])
 app.include_router(tasks.router, prefix=f"/api/{settings.API_VERSION}", tags=["Tasks"])
@@ -167,7 +410,7 @@ app.include_router(communications.router, prefix=f"/api/{settings.API_VERSION}",
 app.include_router(transactions.router, prefix=f"/api/{settings.API_VERSION}", tags=["CRM - Transactions"])
 
 # VisionHome AI & Neighborhood Whisper routers
-app.include_router(vision.router, prefix=f"/api/{settings.API_VERSION}", tags=["VisionHome AI"])
+app.include_router(vision.router, prefix=f"/api/{settings.API_VERSION}")
 app.include_router(neighborhood.router, prefix=f"/api/{settings.API_VERSION}", tags=["Neighborhood Whisper"])
 app.include_router(subscription.router, prefix=f"/api/{settings.API_VERSION}", tags=["Subscription"])
 app.include_router(calendar.router, prefix=f"/api/{settings.API_VERSION}", tags=["Calendar"])

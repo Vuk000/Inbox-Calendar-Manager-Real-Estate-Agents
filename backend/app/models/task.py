@@ -1,7 +1,8 @@
 """Task model for action items from emails"""
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum as SQLEnum, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum as SQLEnum, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy import Index
 import enum
 from ..db import Base
 
@@ -42,10 +43,15 @@ class Task(Base):
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     
-    # Scheduling
-    due_date = Column(DateTime(timezone=True), nullable=True)
+    # Scheduling (Calendar Event Support)
+    due_date = Column(DateTime(timezone=True), nullable=True, index=True)  # Start date/time for calendar events
     due_time = Column(String(20), nullable=True)  # HH:MM format
+    end_date = Column(DateTime(timezone=True), nullable=True)  # End date/time for calendar events
     reminder_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # AI Features
+    ai_suggested = Column(Boolean, default=False, index=True)  # Whether this event was AI-suggested
+    ai_confidence = Column(Numeric(5, 2), nullable=True)  # Confidence score for AI suggestions
     
     # Assignment (for teams)
     assigned_to_email = Column(String(255), nullable=True)
@@ -65,7 +71,7 @@ class Task(Base):
     completion_notes = Column(Text, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
@@ -74,6 +80,13 @@ class Task(Base):
     property = relationship("Property", back_populates="tasks")
     transaction = relationship("Transaction", back_populates="tasks")
     contact = relationship("Contact", foreign_keys=[contact_id])
+    
+    # Performance indexes
+    __table_args__ = (
+        Index('idx_task_user_due', 'user_id', 'due_date'),
+        Index('idx_task_status_type', 'status', 'task_type'),
+        Index('idx_task_ai_suggested', 'ai_suggested', 'user_id'),
+    )
     
     def __repr__(self):
         return f"<Task(id={self.id}, title={self.title}, type={self.task_type}, status={self.status})>"

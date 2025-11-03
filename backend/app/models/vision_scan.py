@@ -1,5 +1,5 @@
 """VisionScan model for VisionHome AI feature"""
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..db import Base
@@ -36,6 +36,12 @@ class VisionScan(Base):
     
     # Relationships
     user = relationship("User", back_populates="vision_scans")
+    
+    # Performance indexes
+    __table_args__ = (
+        Index('idx_vision_user_status', 'user_id', 'status'),
+        Index('idx_vision_created', 'created_at'),
+    )
     
     def __repr__(self):
         return f"<VisionScan(id={self.id}, user_id={self.user_id}, status={self.status})>"

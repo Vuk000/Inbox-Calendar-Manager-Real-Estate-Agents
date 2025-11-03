@@ -1,5 +1,5 @@
 """NeighborhoodReport model for Neighborhood Whisper feature"""
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Numeric, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..db import Base
@@ -45,6 +45,13 @@ class NeighborhoodReport(Base):
     
     # Relationships
     user = relationship("User", back_populates="neighborhood_reports")
+    
+    # Performance indexes
+    __table_args__ = (
+        Index('idx_neighborhood_user_status', 'user_id', 'status'),
+        Index('idx_neighborhood_zip', 'zip_code'),
+        Index('idx_neighborhood_created', 'created_at'),
+    )
     
     def __repr__(self):
         return f"<NeighborhoodReport(id={self.id}, user_id={self.user_id}, fit_score={self.fit_score})>"

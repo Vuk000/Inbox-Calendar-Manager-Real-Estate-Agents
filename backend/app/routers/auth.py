@@ -1,11 +1,13 @@
 """Authentication router - login, register, OAuth"""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from ..dependencies import get_db
 from ..models.user import User, UserRole, SubscriptionTier
@@ -16,46 +18,170 @@ from ..dependencies import get_current_user, get_client_info
 
 logger = logging.getLogger(__name__)
 
-
-router = APIRouter()
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"],
+    responses={
+        400: {"description": "Bad request"},
+        401: {"description": "Unauthorized"},
+        403: {"description": "Forbidden"},
+        429: {"description": "Too many requests"}
+    }
+)
+limiter = Limiter(key_func=get_remote_address)
 
 
 # Pydantic schemas
 class UserRegister(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-    phone_number: Optional[str] = None
+    """User registration request model"""
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, max_length=72, description="Password (8-72 characters)")
+    full_name: str = Field(..., min_length=1, max_length=255, description="User's full name")
+    phone_number: Optional[str] = Field(None, max_length=50, description="Optional phone number")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "agent@example.com",
+                "password": "SecurePassword123!",
+                "full_name": "John Doe",
+                "phone_number": "+1-555-0123"
+            }
+        }
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    """User login request model"""
+    email: EmailStr = Field(..., description="Registered email address")
+    password: str = Field(..., description="User password")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "agent@example.com",
+                "password": "SecurePassword123!"
+            }
+        }
+
+
+class UserInfo(BaseModel):
+    """User information model"""
+    id: int
+    email: str
+    full_name: Optional[str]
+    phone_number: Optional[str]
+    role: str
+    subscription_tier: str
+    subscription_status: Optional[str] = None
+    is_verified: bool = False
+    is_onboarded: bool = False
+    ai_actions_used: int = 0
+    ai_actions_limit: int = 500
+    created_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    user: dict
+    """Token response model"""
+    access_token: str = Field(..., description="JWT access token")
+    refresh_token: str = Field(..., description="JWT refresh token")
+    token_type: str = Field(default="bearer", description="Token type")
+    user: UserInfo
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "user": {
+                    "id": 1,
+                    "email": "agent@example.com",
+                    "full_name": "John Doe",
+                    "role": "agent",
+                    "subscription_tier": "free_trial"
+                }
+            }
+        }
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    """Refresh token request model"""
+    refresh_token: str = Field(..., description="Valid refresh token")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            }
+        }
 
 
 class ProfileUpdate(BaseModel):
-    full_name: Optional[str] = None
-    phone_number: Optional[str] = None
+    """Profile update request model"""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")
+    phone_number: Optional[str] = Field(None, max_length=50, description="Updated phone number")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "full_name": "John Doe Updated",
+                "phone_number": "+1-555-0123"
+            }
+        }
 
 
 class PasswordChange(BaseModel):
-    current_password: str
-    new_password: str
+    """Password change request model"""
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, max_length=72, description="New password (8-72 characters)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_password": "OldPassword123!",
+                "new_password": "NewSecurePassword123!"
+            }
+        }
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register New User",
+    description="""
+    Register a new user account.
+    
+    **Requirements:**
+    - Email must be unique
+    - Password must be at least 8 characters
+    - Password will be truncated if over 72 bytes (bcrypt limit)
+    
+    **Returns:**
+    - Access token (valid for 15 minutes)
+    - Refresh token (valid for 30 days)
+    - User information
+    """,
+    responses={
+        201: {
+            "description": "User registered successfully"
+        },
+        400: {
+            "description": "Invalid input or email already registered",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Email already registered"
+                    }
+                }
+            }
+        }
+    }
+)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     user_data: UserRegister,
     db: Session = Depends(get_db),
     client_info: dict = Depends(get_client_info)
@@ -121,18 +247,70 @@ async def register(
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={
-            "id": new_user.id,
-            "email": new_user.email,
-            "full_name": new_user.full_name,
-            "role": new_user.role.value,
-            "subscription_tier": new_user.subscription_tier.value
-        }
+        user=UserInfo(
+            id=new_user.id,
+            email=new_user.email,
+            full_name=new_user.full_name,
+            phone_number=new_user.phone_number,
+            role=new_user.role.value,
+            subscription_tier=new_user.subscription_tier.value,
+            subscription_status=new_user.subscription_status,
+            is_verified=new_user.is_verified,
+            is_onboarded=new_user.is_onboarded,
+            ai_actions_used=new_user.ai_actions_this_month,
+            ai_actions_limit=new_user.ai_actions_limit,
+            created_at=new_user.created_at,
+            last_login_at=new_user.last_login_at
+        )
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="User Login",
+    description="""
+    Authenticate user with email and password.
+    
+    **Security:**
+    - Failed login attempts are logged
+    - Inactive accounts are rejected
+    - Returns JWT tokens for API access
+    
+    **Returns:**
+    - Access token (valid for 15 minutes)
+    - Refresh token (valid for 30 days)
+    - User information
+    """,
+    responses={
+        200: {
+            "description": "Login successful"
+        },
+        401: {
+            "description": "Invalid credentials",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Incorrect email or password"
+                    }
+                }
+            }
+        },
+        403: {
+            "description": "Account inactive",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Account is inactive"
+                    }
+                }
+            }
+        }
+    }
+)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: Session = Depends(get_db),
     client_info: dict = Depends(get_client_info)
@@ -188,19 +366,56 @@ async def login(
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role.value,
-            "subscription_tier": user.subscription_tier.value
-        }
+        user=UserInfo(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            phone_number=user.phone_number,
+            role=user.role.value,
+            subscription_tier=user.subscription_tier.value,
+            subscription_status=user.subscription_status,
+            is_verified=user.is_verified,
+            is_onboarded=user.is_onboarded,
+            ai_actions_used=user.ai_actions_this_month,
+            ai_actions_limit=user.ai_actions_limit,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at
+        )
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    summary="Refresh Access Token",
+    description="""
+    Refresh access token using a valid refresh token.
+    
+    **Security:**
+    - Refresh token must be valid and not expired
+    - User account must be active
+    - Returns new access and refresh tokens
+    """,
+    responses={
+        200: {
+            "description": "Token refreshed successfully"
+        },
+        401: {
+            "description": "Invalid or expired refresh token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid or expired refresh token"
+                    }
+                }
+            }
+        }
+    }
+)
+@limiter.limit("20/minute")
 async def refresh_token(
-    request: RefreshTokenRequest,
+    request: Request,
+    refresh_request: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -209,7 +424,7 @@ async def refresh_token(
     - **refresh_token**: Valid refresh token
     """
     # Verify refresh token
-    payload = verify_token(request.refresh_token, token_type="refresh")
+    payload = verify_token(refresh_request.refresh_token, token_type="refresh")
     
     if not payload:
         raise HTTPException(
@@ -235,51 +450,94 @@ async def refresh_token(
     return TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,
-        user={
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role.value,
-            "subscription_tier": user.subscription_tier.value
-        }
+        user=UserInfo(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            phone_number=user.phone_number,
+            role=user.role.value,
+            subscription_tier=user.subscription_tier.value,
+            subscription_status=user.subscription_status,
+            is_verified=user.is_verified,
+            is_onboarded=user.is_onboarded,
+            ai_actions_used=user.ai_actions_this_month,
+            ai_actions_limit=user.ai_actions_limit,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at
+        )
     )
 
 
-@router.get("/me")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """
-    Get current authenticated user information.
-    """
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "phone_number": current_user.phone_number,
-        "role": current_user.role.value,
-        "subscription_tier": current_user.subscription_tier.value,
-        "subscription_status": current_user.subscription_status,
-        "is_verified": current_user.is_verified,
-        "is_onboarded": current_user.is_onboarded,
-        "ai_actions_used": current_user.ai_actions_this_month,
-        "ai_actions_limit": current_user.ai_actions_limit,
-        "created_at": current_user.created_at,
-        "last_login_at": current_user.last_login_at
+@router.get(
+    "/me",
+    response_model=UserInfo,
+    summary="Get Current User",
+    description="Get information about the currently authenticated user",
+    responses={
+        200: {
+            "description": "User information retrieved successfully"
+        },
+        401: {
+            "description": "Unauthorized - invalid or missing token"
+        }
     }
+)
+@limiter.limit("30/minute")
+async def get_current_user_info(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Get information about the currently authenticated user"""
+    return UserInfo(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        phone_number=current_user.phone_number,
+        role=current_user.role.value,
+        subscription_tier=current_user.subscription_tier.value,
+        subscription_status=current_user.subscription_status,
+        is_verified=current_user.is_verified,
+        is_onboarded=current_user.is_onboarded,
+        ai_actions_used=current_user.ai_actions_this_month,
+        ai_actions_limit=current_user.ai_actions_limit,
+        created_at=current_user.created_at,
+        last_login_at=current_user.last_login_at
+    )
 
 
-@router.patch("/me", response_model=dict)
+@router.patch(
+    "/me",
+    response_model=UserInfo,
+    summary="Update Profile",
+    description="""
+    Update user profile information.
+    
+    **Allowed Fields:**
+    - full_name: User's full name
+    - phone_number: User's phone number
+    
+    **Security:**
+    - Requires authentication
+    - All changes are logged for audit
+    """,
+    responses={
+        200: {
+            "description": "Profile updated successfully"
+        },
+        401: {
+            "description": "Unauthorized"
+        }
+    }
+)
+@limiter.limit("10/minute")
 async def update_profile(
+    request: Request,
     profile_update: ProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     client_info: dict = Depends(get_client_info)
 ):
-    """
-    Update user profile information.
-    
-    - **full_name**: Updated full name
-    - **phone_number**: Updated phone number
-    """
+    """Update user profile information"""
     # Update fields
     if profile_update.full_name is not None:
         current_user.full_name = profile_update.full_name
@@ -298,29 +556,73 @@ async def update_profile(
         **client_info
     )
     
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "phone_number": current_user.phone_number,
-        "role": current_user.role.value,
-        "subscription_tier": current_user.subscription_tier.value,
+    return UserInfo(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        phone_number=current_user.phone_number,
+        role=current_user.role.value,
+        subscription_tier=current_user.subscription_tier.value,
+        subscription_status=current_user.subscription_status,
+        is_verified=current_user.is_verified,
+        is_onboarded=current_user.is_onboarded,
+        ai_actions_used=current_user.ai_actions_this_month,
+        ai_actions_limit=current_user.ai_actions_limit,
+        created_at=current_user.created_at,
+        last_login_at=current_user.last_login_at
+    )
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_200_OK,
+    summary="Change Password",
+    description="""
+    Change user password.
+    
+    **Requirements:**
+    - Current password must be correct
+    - New password must be at least 8 characters
+    - Password will be truncated if over 72 bytes (bcrypt limit)
+    
+    **Security:**
+    - Failed attempts are logged
+    - Successful changes are logged for audit
+    """,
+    responses={
+        200: {
+            "description": "Password changed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Password changed successfully"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid current password or new password too short",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Incorrect current password"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized"
+        }
     }
-
-
-@router.post("/change-password", status_code=status.HTTP_200_OK)
+)
+@limiter.limit("5/minute")
 async def change_password(
+    request: Request,
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     client_info: dict = Depends(get_client_info)
 ):
-    """
-    Change user password.
-    
-    - **current_password**: Current password
-    - **new_password**: New password (min 8 characters)
-    """
     # Verify current password
     if not verify_password(password_data.current_password, current_user.hashed_password):
         await log_action(

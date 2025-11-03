@@ -2,8 +2,16 @@
 from typing import List, Dict, Any, Optional
 import os
 import logging
-from google.cloud import vision
-from google.oauth2 import service_account
+
+# Optional Google Cloud Vision imports
+try:
+    from google.cloud import vision
+    from google.oauth2 import service_account
+    GOOGLE_VISION_AVAILABLE = True
+except ImportError:
+    GOOGLE_VISION_AVAILABLE = False
+    vision = None
+    service_account = None
 
 from ..config import settings
 from ..shared.exceptions import GoogleAPIException, VisionProcessingException
@@ -21,6 +29,14 @@ class GoogleVisionClient:
     
     def __init__(self):
         """Initialize Google Vision client"""
+        if not GOOGLE_VISION_AVAILABLE:
+            logger.warning(
+                "Google Cloud Vision library not installed. "
+                "Install with: pip install google-cloud-vision"
+            )
+            self.client = None
+            return
+            
         self.credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
         
         if not self.credentials_path or not os.path.exists(self.credentials_path):
