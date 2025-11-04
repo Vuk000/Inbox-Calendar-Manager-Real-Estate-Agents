@@ -1,5 +1,4 @@
 """Celery tasks for VisionHome AI - Async CV processing"""
-from celery import Task
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -12,10 +11,31 @@ from ..shared.exceptions import VisionProcessingException
 
 logger = logging.getLogger(__name__)
 
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
 
-@celery_app.task(bind=True, name="vision.process_image", max_retries=3)
+
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(bind=True, name="vision.process_image", max_retries=3)
 def process_vision_scan(
-    self: Task,
+    self,
     scan_id: int,
     image_content: bytes,
     property_address: Optional[str] = None
@@ -84,7 +104,7 @@ def process_vision_scan(
             db.commit()
         
         # Retry if transient error
-        if self.request.retries < self.max_retries:
+        if celery_app is not None and hasattr(self, 'request') and self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=60)
         
         raise VisionProcessingException(f"Failed to process vision scan: {str(e)}")

@@ -115,7 +115,9 @@ def sync_twitter_account(self, account_id: int, db: Session = None):
         return {"status": "success", "processed": processed}
     except Exception as exc:
         logger.exception("Twitter sync failed for account %s", account_id)
-        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        if celery_app is not None and hasattr(self, 'request') and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        raise
 
 
 @celery_task(base=BaseSocialSyncTask, bind=True, max_retries=3)
@@ -190,4 +192,6 @@ def sync_facebook_account(self, account_id: int, db: Session = None):
         return {"status": "success", "processed": processed}
     except Exception as exc:
         logger.exception("Facebook sync failed for account %s", account_id)
-        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        if celery_app is not None and hasattr(self, 'request') and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        raise

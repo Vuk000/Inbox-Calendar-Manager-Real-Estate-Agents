@@ -3,6 +3,7 @@ Generate embeddings for semantic email search
 """
 from typing import List
 from sentence_transformers import SentenceTransformer
+from sqlalchemy.orm import Session
 from .celery_app import celery_app
 from ..db import SessionLocal
 from ..models.communication_log import CommunicationLog, CommunicationType

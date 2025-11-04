@@ -18,7 +18,7 @@ from .integrations.gmail_integration import GmailIntegration
 from .integrations.outlook_integration import OutlookIntegration
 from .integrations.vector_store import VectorStore
 from .security.jwt_handler import decode_access_token
-from .models.user import User
+from .models.user import User, UserRole
 from .shared.exceptions import AuthenticationException, InvalidTokenException
 
 logger = logging.getLogger(__name__)
@@ -218,7 +218,7 @@ def require_admin(
     Raises:
         HTTPException: 403 if user is not admin
     """
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -241,7 +241,7 @@ def require_agent_or_admin(
     Raises:
         HTTPException: 403 if user is viewer
     """
-    if current_user.role not in ["agent", "admin"]:
+    if current_user.role not in [UserRole.AGENT, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Agent or admin access required"

@@ -1,5 +1,4 @@
 """Celery tasks for human-in-loop approval queues"""
-from celery import Task
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 import logging
@@ -11,8 +10,29 @@ from ..utils.cache import redis_client
 
 logger = logging.getLogger(__name__)
 
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
 
-@celery_app.task(name="approval.queue_item")
+
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(name="approval.queue_item")
 def queue_for_approval(
     user_id: int,
     feature_type: str,
@@ -72,7 +92,7 @@ def queue_for_approval(
         db.close()
 
 
-@celery_app.task(name="approval.process_expired")
+@celery_task(name="approval.process_expired")
 def process_expired_approvals():
     """Process expired approval queue items"""
     db = SessionLocal()
@@ -96,7 +116,7 @@ def process_expired_approvals():
         db.close()
 
 
-@celery_app.task(name="approval.send_notification")
+@celery_task(name="approval.send_notification")
 def send_approval_notification(approval_id: int):
     """
     Send notification for approval request.

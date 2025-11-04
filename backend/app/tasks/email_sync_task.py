@@ -442,9 +442,10 @@ def process_email_with_ai(self, comm_log_id: int, db: Session = None) -> dict:
         analysis = asyncio.run(agent.analyze_email(email_data))
         
         # Update communication log with AI results
-        comm_log.urgency_score = analysis.get("urgency_score", 20.0)
-        comm_log.sentiment_score = analysis.get("sentiment_score", 0.0)
-        comm_log.key_topics = analysis.get("entities", {})
+        comm_log.urgency_score = analysis.urgency_score
+        comm_log.sentiment_score = analysis.sentiment_score
+        # Convert entities Pydantic model to dict for JSON storage
+        comm_log.key_topics = analysis.entities.model_dump() if hasattr(analysis.entities, 'model_dump') else analysis.entities.dict()
         
         # Generate AI summary if not already present
         if not comm_log.summary and comm_log.body:

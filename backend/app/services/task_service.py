@@ -10,7 +10,7 @@ import logging
 from anthropic import Anthropic
 
 from ..config import settings
-from ..models.task import Task, TaskPriority, TaskStatus
+from ..models.task import Task, TaskStatus, TaskType
 from ..models.communication_log import CommunicationLog, CommunicationType
 from ..models.user import User
 from ..integrations.google_calendar import GoogleCalendarIntegration
@@ -127,20 +127,15 @@ Return ONLY valid JSON:"""
             
             # Create task
             task = Task(
-                title=task_data.get("task_title", f"Follow up: {comm_log.subject}")[:200],
+                user_id=user.id,
+                task_type=TaskType.GENERAL,  # Default type, can be refined with AI
+                title=task_data.get("task_title", f"Follow up: {comm_log.subject}")[:500],
                 description=task_data.get("task_description"),
-                status=TaskStatus.PENDING,
-                priority=TaskPriority(task_data.get("priority", "medium")),
+                status=TaskStatus.TODO,
+                priority=task_data.get("priority", "medium"),
                 due_date=due_date,
                 communication_log_id=comm_log.id,
-                created_by=user.id,
-                metadata={
-                    "action_items": task_data.get("action_items", []),
-                    "attendees": task_data.get("attendees", []),
-                    "estimated_duration": task_data.get("estimated_duration"),
-                    "created_from_email": True,
-                    "contact_id": comm_log.contact_id
-                }
+                contact_id=comm_log.contact_id
             )
             
             db.add(task)
@@ -150,7 +145,8 @@ Return ONLY valid JSON:"""
             logger.info(f"Created task {task.id} from communication {comm_log.id}")
             
             # Sync to Google Calendar if enabled
-            if auto_sync_calendar and user.google_calendar_enabled:
+            # Note: Check if user has calendar integration via email_accounts
+            if auto_sync_calendar:
                 try:
                     await self.sync_to_calendar(task, user, db)
                 except Exception as e:
@@ -211,10 +207,15 @@ Return ONLY valid JSON:"""
                 }
             }
             
-            # Add attendees if available
-            attendees = task.metadata.get("attendees", []) if task.metadata else []
-            if attendees:
-                event_data["attendees"] = [{"email": email} for email in attendees if "@" in str(email)]
+            # Add attendees if available (from communication log or contact)
+            if task.communication_log:
+                comm_log = task.communication_log
+                if comm_log.from_address:
+                    event_data["attendees"] = [{"email": comm_log.from_address}]
+            elif task.contact:
+                contact = task.contact
+                if contact.email:
+                    event_data["attendees"] = [{"email": contact.email}]
             
             # Create calendar event
             # TODO: Get user's encrypted calendar credentials
@@ -226,11 +227,8 @@ Return ONLY valid JSON:"""
             # For now, log placeholder
             logger.info(f"TODO: Sync task {task.id} to Google Calendar")
             
-            # Store calendar event ID in task metadata
-            if task.metadata:
-                task.metadata["calendar_event_id"] = "placeholder_event_id"
-            else:
-                task.metadata = {"calendar_event_id": "placeholder_event_id"}
+            # Store calendar event ID in task
+            task.calendar_event_id = "placeholder_event_id"
             
             db.commit()
             

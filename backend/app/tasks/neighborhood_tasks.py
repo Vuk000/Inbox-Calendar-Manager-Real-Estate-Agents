@@ -1,5 +1,4 @@
 """Celery tasks for Neighborhood Whisper - Async ML forecasting"""
-from celery import Task
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -12,10 +11,31 @@ from ..shared.exceptions import NeighborhoodSearchException
 
 logger = logging.getLogger(__name__)
 
+# Only import Task if celery_app is available
+if celery_app is not None:
+    from celery import Task
+else:
+    # Mock Task class if Celery unavailable
+    class Task:
+        pass
 
-@celery_app.task(bind=True, name="neighborhood.generate_report", max_retries=3)
+
+# Decorator helper for conditional Celery task registration
+def celery_task(*args, **kwargs):
+    """Conditional Celery task decorator - only registers if celery_app is available"""
+    if celery_app is not None:
+        return celery_app.task(*args, **kwargs)
+    else:
+        # Return a no-op decorator if Celery unavailable
+        def decorator(func):
+            logger.warning(f"Celery unavailable - task {func.__name__} will not be registered")
+            return func
+        return decorator
+
+
+@celery_task(bind=True, name="neighborhood.generate_report", max_retries=3)
 def generate_neighborhood_report(
-    self: Task,
+    self,
     report_id: int,
     query: str,
     user_preferences: Optional[Dict[str, Any]] = None
@@ -89,7 +109,7 @@ def generate_neighborhood_report(
             db.commit()
         
         # Retry if transient error
-        if self.request.retries < self.max_retries:
+        if celery_app is not None and hasattr(self, 'request') and self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=60)
         
         raise NeighborhoodSearchException(f"Failed to generate neighborhood report: {str(e)}")
